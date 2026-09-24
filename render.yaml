@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: miniproject-app
+    env: node
+    plan: free
+    buildCommand: npm install && npm --prefix client install && npm --prefix client run build
+    startCommand: node src/db/migrate.js && node src/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: miniproject-db
+          property: connectionString
+      - key: ADMIN_EMAIL
+        value: admin@college.com
+
+databases:
+  - name: miniproject-db
+    plan: free
+    databaseName: miniproject
+    user: postgres

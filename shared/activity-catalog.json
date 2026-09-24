@@ -1,0 +1,371 @@
+{
+  "version": 2,
+  "modes": ["Offline", "Online", "Hybrid"],
+  "scopes": ["Institute / Local", "State", "National", "International"],
+  "activityStatuses": ["Completed", "Ongoing", "Planned", "Cancelled"],
+  "workflowStatuses": ["Draft", "Submitted", "Changes Requested", "Approved", "Archived"],
+  "evidenceAvailability": ["Available now", "Not issued", "Will upload later"],
+  "typeGroups": [
+    {
+      "label": "Faculty development and academic events",
+      "types": [
+        {
+          "name": "Workshop (Attended)",
+          "shortName": "Workshop Attended",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": true,
+          "requiresHost": true,
+          "requiresScope": true,
+          "defaultRole": "Participant / Attendee",
+          "roles": ["Participant / Attendee", "Session Chair / Judge", "Other"]
+        },
+        {
+          "name": "Workshop (Organized)",
+          "shortName": "Workshop Organized",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": true,
+          "requiresHost": true,
+          "requiresScope": true,
+          "defaultRole": "Organizer / Coordinator",
+          "roles": ["Organizer / Coordinator", "Convenor", "Co-Coordinator", "Other"]
+        },
+        {
+          "name": "Seminar (Attended)",
+          "shortName": "Seminar Attended",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": true,
+          "requiresHost": true,
+          "requiresScope": true,
+          "defaultRole": "Participant / Attendee",
+          "roles": ["Participant / Attendee", "Session Chair / Judge", "Other"]
+        },
+        {
+          "name": "Seminar (Organized)",
+          "shortName": "Seminar Organized",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": true,
+          "requiresHost": true,
+          "requiresScope": true,
+          "defaultRole": "Organizer / Coordinator",
+          "roles": ["Organizer / Coordinator", "Convenor", "Co-Coordinator", "Other"]
+        },
+        {
+          "name": "Webinar (Attended)",
+          "shortName": "Webinar Attended",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": true,
+          "requiresHost": true,
+          "requiresScope": true,
+          "defaultRole": "Participant / Attendee",
+          "roles": ["Participant / Attendee", "Session Chair / Judge", "Other"]
+        },
+        {
+          "name": "Webinar (Organized)",
+          "shortName": "Webinar Organized",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": true,
+          "requiresHost": true,
+          "requiresScope": true,
+          "defaultRole": "Organizer / Coordinator",
+          "roles": ["Organizer / Coordinator", "Convenor", "Co-Coordinator", "Other"]
+        },
+        {
+          "name": "Faculty Development Programme / FDP (Attended)",
+          "shortName": "FDP Attended",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": true,
+          "requiresHost": true,
+          "requiresScope": true,
+          "defaultRole": "Participant / Attendee",
+          "roles": ["Participant / Attendee", "Session Chair / Judge", "Other"]
+        },
+        {
+          "name": "Faculty Development Programme / FDP (Organized)",
+          "shortName": "FDP Organized",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": true,
+          "requiresHost": true,
+          "requiresScope": true,
+          "defaultRole": "Organizer / Coordinator",
+          "roles": ["Organizer / Coordinator", "Convenor", "Co-Coordinator", "Other"]
+        },
+        {
+          "name": "Guest Lecture Delivered",
+          "shortName": "Guest Lecture Delivered",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": false,
+          "requiresHost": true,
+          "requiresScope": true,
+          "defaultRole": "Speaker / Resource Person",
+          "roles": ["Speaker / Resource Person", "Guest Speaker", "Keynote Speaker", "Session Chair / Judge", "Other"]
+        },
+        {
+          "name": "Guest Lecture Organized",
+          "shortName": "Guest Lecture Organized",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": false,
+          "supportsGuests": true,
+          "requiresHost": true,
+          "requiresScope": true,
+          "defaultRole": "Organizer / Coordinator",
+          "roles": ["Organizer / Coordinator", "Faculty Coordinator", "Convenor", "Other"]
+        },
+        {
+          "name": "Guest Lecture Attended",
+          "shortName": "Guest Lecture Attended",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": false,
+          "requiresHost": true,
+          "requiresScope": true,
+          "defaultRole": "Participant / Attendee",
+          "roles": ["Participant / Attendee", "Other"]
+        },
+        {
+          "name": "Conference (Attended / Presented)",
+          "shortName": "Conference Attended",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": true,
+          "requiresHost": true,
+          "requiresScope": true,
+          "defaultRole": "Participant / Attendee",
+          "roles": ["Participant / Attendee", "Presenter / Author", "Session Chair / Judge", "Other"]
+        },
+        {
+          "name": "Conference (Organized)",
+          "shortName": "Conference Organized",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": true,
+          "requiresHost": true,
+          "requiresScope": true,
+          "defaultRole": "Organizer / Coordinator",
+          "roles": ["Organizer / Coordinator", "Convenor", "Session Chair / Judge", "Other"]
+        },
+        {
+          "name": "Training / Certification Programme",
+          "shortName": "Training / Certification",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": true,
+          "requiresHost": true,
+          "requiresScope": true,
+          "defaultRole": "Participant / Attendee",
+          "roles": ["Participant / Attendee", "Organizer / Coordinator", "Trainer / Resource Person"]
+        },
+        {
+          "name": "Industrial Visit",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": false,
+          "requiresHost": true,
+          "requiresScope": true,
+          "roles": ["Organizer / Coordinator", "Faculty Accompanying", "Participant / Attendee"],
+          "fields": [
+            { "name": "companyName", "label": "Company / organisation visited", "type": "text", "required": true },
+            { "name": "programmeYear", "label": "Student programme and year", "type": "text", "required": true, "placeholder": "e.g. Third Year B.Tech CSE" },
+            { "name": "industryContact", "label": "Industry contact person", "type": "text" },
+            { "name": "academicRelevance", "label": "Academic relevance / learning objective", "type": "textarea", "required": true }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Research, innovation and recognition",
+      "types": [
+        {
+          "name": "Research Publication",
+          "eventBased": false,
+          "requiresHost": true,
+          "requiresScope": true,
+          "roles": ["Author / Co-author", "Reviewer / Editor"],
+          "fields": [
+            { "name": "publicationType", "label": "Publication type", "type": "select", "required": true, "options": ["Journal article", "Conference paper", "Review article", "Other"] },
+            { "name": "authors", "label": "Authors", "type": "text", "required": true },
+            { "name": "publicationDate", "label": "Publication date", "type": "date", "required": true },
+            { "name": "doiUrl", "label": "DOI or official URL", "type": "url" },
+            { "name": "issn", "label": "ISSN", "type": "text" },
+            { "name": "indexing", "label": "Indexing", "type": "select", "options": ["Scopus", "Web of Science", "UGC CARE", "Other", "Not indexed"] }
+          ]
+        },
+        {
+          "name": "Book / Book Chapter",
+          "eventBased": false,
+          "requiresHost": true,
+          "requiresScope": true,
+          "roles": ["Author / Co-author", "Editor"],
+          "fields": [
+            { "name": "publicationType", "label": "Publication type", "type": "select", "required": true, "options": ["Book", "Book chapter", "Edited volume", "Conference proceedings"] },
+            { "name": "authors", "label": "Authors / editors", "type": "text", "required": true },
+            { "name": "publisher", "label": "Publisher", "type": "text", "required": true },
+            { "name": "publicationDate", "label": "Publication date", "type": "date", "required": true },
+            { "name": "isbn", "label": "ISBN / ISSN", "type": "text" },
+            { "name": "doiUrl", "label": "DOI or official URL", "type": "url" }
+          ]
+        },
+        {
+          "name": "Research Project / Grant",
+          "eventBased": false,
+          "supportsFunding": true,
+          "requiresHost": true,
+          "requiresScope": true,
+          "roles": ["Principal Investigator", "Co-Investigator", "Project Coordinator"],
+          "fields": [
+            { "name": "investigators", "label": "Investigators", "type": "text", "required": true },
+            { "name": "projectStatus", "label": "Project status", "type": "select", "required": true, "options": ["Sanctioned", "Ongoing", "Completed", "Submitted"] },
+            { "name": "sanctionedAmount", "label": "Sanctioned amount (INR)", "type": "number", "min": 0 }
+          ]
+        },
+        {
+          "name": "Patent / Innovation",
+          "eventBased": false,
+          "requiresHost": false,
+          "requiresScope": true,
+          "roles": ["Inventor / Co-inventor", "Mentor / Guide"],
+          "fields": [
+            { "name": "innovationType", "label": "Innovation type", "type": "select", "required": true, "options": ["Patent", "Copyright", "Prototype", "Product", "Design registration", "Other"] },
+            { "name": "inventors", "label": "Inventors / contributors", "type": "text", "required": true },
+            { "name": "applicationNumber", "label": "Application / registration number", "type": "text" },
+            { "name": "patentStatus", "label": "Current status", "type": "select", "required": true, "options": ["Filed", "Published", "Granted", "Commercialised", "In development"] },
+            { "name": "filingDate", "label": "Filing / completion date", "type": "date" }
+          ]
+        },
+        {
+          "name": "Faculty Achievement / Award",
+          "eventBased": false,
+          "requiresHost": true,
+          "requiresScope": true,
+          "roles": ["Awardee / Recipient", "Mentor / Guide"],
+          "fields": [
+            { "name": "awardName", "label": "Award / recognition", "type": "text", "required": true },
+            { "name": "awardingBody", "label": "Awarding body", "type": "text", "required": true },
+            { "name": "recipientName", "label": "Recipient", "type": "text", "required": true },
+            { "name": "awardDate", "label": "Award date", "type": "date", "required": true }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Teaching, industry and institutional contribution",
+      "types": [
+        {
+          "name": "Consultancy / Corporate Training",
+          "eventBased": false,
+          "requiresHost": true,
+          "requiresScope": false,
+          "roles": ["Consultant", "Project Coordinator", "Trainer / Resource Person"],
+          "fields": [
+            { "name": "clientOrganisation", "label": "Client organisation", "type": "text", "required": true },
+            { "name": "facultyConsultants", "label": "Faculty consultants", "type": "text" },
+            { "name": "beneficiaries", "label": "Beneficiaries / trainees", "type": "number", "min": 0 },
+            { "name": "revenue", "label": "Revenue generated (INR)", "type": "number", "min": 0 }
+          ]
+        },
+        {
+          "name": "Value-Added Course",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": false,
+          "requiresHost": false,
+          "requiresScope": false,
+          "roles": ["Course Coordinator", "Organizer / Coordinator", "Trainer / Resource Person"],
+          "fields": [
+            { "name": "courseCode", "label": "Course code", "type": "text" },
+            { "name": "targetAudience", "label": "Target audience", "type": "text", "required": true },
+            { "name": "courseObjectives", "label": "Course objectives", "type": "textarea" }
+          ]
+        },
+        {
+          "name": "E-Learning / OER",
+          "eventBased": false,
+          "requiresHost": true,
+          "requiresScope": false,
+          "roles": ["Content Creator", "Course Coordinator", "Contributor"],
+          "fields": [
+            { "name": "resourceType", "label": "Resource type", "type": "select", "required": true, "options": ["MOOC", "Video lecture", "Digital module", "Open educational resource", "Learning repository", "Other"] },
+            { "name": "platform", "label": "Platform / repository", "type": "text", "required": true },
+            { "name": "resourceUrl", "label": "Resource URL", "type": "url" }
+          ]
+        },
+        {
+          "name": "Student Development / CEP",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": true,
+          "requiresHost": false,
+          "requiresScope": false,
+          "roles": ["Organizer / Coordinator", "Mentor / Guide", "Trainer / Resource Person"],
+          "fields": [
+            { "name": "targetAudience", "label": "Target student group", "type": "text", "required": true },
+            { "name": "collaboratingAgency", "label": "Collaborating agency", "type": "text" }
+          ]
+        },
+        {
+          "name": "Outreach / Extension",
+          "eventBased": true,
+          "supportsAttendance": true,
+          "supportsFunding": true,
+          "requiresHost": false,
+          "requiresScope": true,
+          "roles": ["Organizer / Coordinator", "Mentor / Guide", "Volunteer", "Speaker / Resource Person"],
+          "fields": [
+            { "name": "beneficiaryGroup", "label": "Beneficiary group", "type": "text", "required": true },
+            { "name": "activityLocation", "label": "Activity location", "type": "text", "required": true }
+          ]
+        },
+        {
+          "name": "Professional Membership / Service",
+          "eventBased": false,
+          "requiresHost": true,
+          "requiresScope": false,
+          "roles": ["Member", "Office Bearer", "Reviewer / Editor", "Committee Member"],
+          "fields": [
+            { "name": "professionalBody", "label": "Professional body", "type": "text", "required": true },
+            { "name": "membershipNumber", "label": "Membership number", "type": "text" },
+            { "name": "validUntil", "label": "Valid until", "type": "date" }
+          ]
+        },
+        {
+          "name": "Partnership / MoU",
+          "eventBased": false,
+          "requiresHost": false,
+          "requiresScope": true,
+          "roles": ["MoU Coordinator", "Signatory", "Committee Member"],
+          "fields": [
+            { "name": "partnerOrganisation", "label": "Partner organisation", "type": "text", "required": true },
+            { "name": "partnershipPurpose", "label": "Purpose / expected collaboration", "type": "textarea", "required": true },
+            { "name": "effectiveDate", "label": "Effective / signing date", "type": "date", "required": true },
+            { "name": "expiryDate", "label": "Expiry date", "type": "date" },
+            { "name": "agreementStatus", "label": "Agreement status", "type": "select", "required": true, "options": ["Proposed", "Active", "Expired", "Renewed", "Closed"] }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "Other",
+      "types": [
+        {
+          "name": "Other",
+          "eventBased": false,
+          "requiresHost": false,
+          "requiresScope": false,
+          "roles": ["Organizer / Coordinator", "Participant / Attendee", "Contributor", "Other"],
+          "fields": [
+            { "name": "otherType", "label": "Specify activity type", "type": "text", "required": true }
+          ]
+        }
+      ]
+    }
+  ]
+}
