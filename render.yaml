@@ -21,4 +21,4 @@ databases:
   - name: miniproject-db
     plan: free
     databaseName: miniproject
-    user: postgres
+    user: miniproject_user
