@@ -4,9 +4,27 @@ const { Document, Packer, Paragraph, TextRun, HeadingLevel } = require('docx')
 const path = require('path')
 const fs = require('fs')
 const crypto = require('crypto')
+const pool = require('../db/pool')
 
 const BRAND_NAVY = '1A365D'
 const BRAND_GOLD = 'B7791F'
+
+// Fetch the HOD's uploaded signature image for a given department.
+// Returns the base64 data-URI string or null if none uploaded.
+async function fetchHodSignature(department) {
+  try {
+    const result = await pool.query(
+      `SELECT signature_image FROM users
+       WHERE role = 'HOD' AND LOWER(department) = LOWER($1)
+         AND is_active = TRUE AND signature_image IS NOT NULL
+       ORDER BY updated_at DESC LIMIT 1`,
+      [department || '']
+    )
+    return result.rows[0]?.signature_image || null
+  } catch {
+    return null
+  }
+}
 
 const humanize = (value = '') => value
   .replace(/([A-Z])/g, ' $1')
@@ -539,7 +557,10 @@ function generateDocx(records, metadata) {
 // ─────────────────────────────────────────────────────────────
 // APPRECIATION LETTER PDF GENERATOR (WITH HOD APPROVAL & DIGITAL SIGNATURE)
 // ─────────────────────────────────────────────────────────────
-function generateAppreciationLetterPdf(activity, generatedBy) {
+async function generateAppreciationLetterPdf(activity, generatedBy) {
+  // Fetch HOD signature before starting the PDF stream
+  const hodSignatureBase64 = await fetchHodSignature(activity.department)
+
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'A4',
@@ -691,30 +712,47 @@ function generateAppreciationLetterPdf(activity, generatedBy) {
     doc.roundedRect(295, stampY, 255, 115, 6).fillAndStroke('#F0FDF4', '#16A34A')
     doc.roundedRect(295, stampY, 255, 22, 4).fill('#16A34A')
     doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8.5)
-      .text('✓  DIGITALLY SIGNED & APPROVED BY HOD', 295, stampY + 6, { width: 255, align: 'center' })
+      .text('✓  HOD APPROVED — DIGITAL SIGNATURE', 295, stampY + 6, { width: 255, align: 'center' })
 
     const reviewerName = activity.reviewer_name || 'Dr. A. R. Surve'
-    doc.fillColor('#14532D').font('Helvetica-Bold').fontSize(11)
-      .text(reviewerName, 308, stampY + 30)
+
+    // Draw the HOD's real signature image if available, else fall back to typed name
+    if (hodSignatureBase64) {
+      try {
+        // Strip the data: URI prefix so PDFKit gets raw base64
+        const imgData = hodSignatureBase64.startsWith('data:')
+          ? Buffer.from(hodSignatureBase64.split(',')[1], 'base64')
+          : Buffer.from(hodSignatureBase64, 'base64')
+        doc.image(imgData, 303, stampY + 27, { width: 110, height: 48, fit: [110, 48] })
+      } catch {
+        // Fallback: typed name in italic if image fails to render
+        doc.fillColor('#14532D').font('Helvetica-BoldOblique').fontSize(14)
+          .text(reviewerName, 308, stampY + 30, { width: 230 })
+      }
+    } else {
+      // No signature uploaded — show italicised name with "(signature pending)" note
+      doc.fillColor('#14532D').font('Helvetica-BoldOblique').fontSize(13)
+        .text(reviewerName, 308, stampY + 28, { width: 230 })
+      doc.fillColor('#64748B').font('Helvetica-Oblique').fontSize(7)
+        .text('(Signature not yet uploaded — contact HOD)', 308, stampY + 46, { width: 230 })
+    }
+
     doc.fillColor('#166534').font('Helvetica-Bold').fontSize(8.5)
-      .text('Head of Department', 308, stampY + 45)
+      .text('Head of Department', 308, stampY + 75)
     doc.fillColor('#15803D').font('Helvetica').fontSize(8)
-      .text(activity.department || 'Department of Computer Science and Engineering', 308, stampY + 57)
-    doc.text('Walchand College of Engineering, Sangli', 308, stampY + 68)
+      .text(activity.department || 'Department of Computer Science and Engineering', 308, stampY + 87)
 
     const reviewDate = activity.reviewed_at ? formatDate(activity.reviewed_at) : formatDate(new Date())
     doc.fillColor('#166534').font('Helvetica').fontSize(7.5)
-      .text(`Approval Date: ${reviewDate}  ·  Verified Record`, 308, stampY + 81)
+      .text(`Approved: ${reviewDate}`, 308, stampY + 97)
 
     const verHash = crypto.createHash('sha256')
       .update(`WCE-APPR-${activity.act_id}-${activity.reviewed_at || 'APPROVED'}`)
       .digest('hex')
       .slice(0, 16)
       .toUpperCase()
-    doc.fillColor('#14532D').font('Courier-Bold').fontSize(7)
-      .text(`SHA-256 ID: WCE-VAL-${activity.act_id || '101'}-${verHash}`, 308, stampY + 94)
-    doc.fillColor('#15803D').font('Helvetica-Oblique').fontSize(6.5)
-      .text('Cryptographic signature generated via WCE Prof-Insights Portal', 308, stampY + 104)
+    doc.fillColor('#14532D').font('Courier-Bold').fontSize(6.5)
+      .text(`SHA-256: WCE-VAL-${activity.act_id || '101'}-${verHash}`, 308, stampY + 107)
 
     // Security Notice & Footer
     doc.strokeColor('#CBD5E1').lineWidth(0.5).moveTo(38, 642).lineTo(557, 642).stroke()

@@ -79,6 +79,63 @@ router.post('/signup', isLoggedIn, isAdmin, async (req, res) => {
   }
 })
 
+// ─── HOD Signature Upload ─────────────────────────────────────
+// Accepts a base64-encoded image string (PNG or JPEG).
+// Only HOD and Admin accounts may upload a signature.
+router.post('/upload-signature', isLoggedIn, async (req, res) => {
+  if (!['HOD', 'Admin'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Only HOD or Admin accounts can upload a signature.' })
+  }
+
+  const signatureImage = String(req.body.signatureImage || '').trim()
+  if (!signatureImage) {
+    return res.status(400).json({ error: 'No signature image provided.' })
+  }
+  // Basic validation: must be a valid data-URI or base64 string
+  if (!signatureImage.startsWith('data:image/') && !/^[A-Za-z0-9+/=]{100,}$/.test(signatureImage)) {
+    return res.status(400).json({ error: 'Invalid image format. Upload a PNG or JPEG file.' })
+  }
+  // Rough size guard — base64 of ~300 KB image is ~400 KB string
+  if (signatureImage.length > 600_000) {
+    return res.status(413).json({ error: 'Signature image is too large. Please upload an image smaller than 400 KB.' })
+  }
+
+  try {
+    await pool.query(
+      'UPDATE users SET signature_image = $1, updated_at = NOW() WHERE id = $2',
+      [signatureImage, req.user.id]
+    )
+    return res.json({ message: 'Signature uploaded successfully.' })
+  } catch (error) {
+    console.error('Signature upload error:', error)
+    return res.status(500).json({ error: 'Unable to save the signature.' })
+  }
+})
+
+// Remove uploaded signature
+router.delete('/signature', isLoggedIn, async (req, res) => {
+  if (!['HOD', 'Admin'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Only HOD or Admin accounts can manage a signature.' })
+  }
+  try {
+    await pool.query('UPDATE users SET signature_image = NULL, updated_at = NOW() WHERE id = $1', [req.user.id])
+    return res.json({ message: 'Signature removed.' })
+  } catch (error) {
+    console.error('Signature delete error:', error)
+    return res.status(500).json({ error: 'Unable to remove the signature.' })
+  }
+})
+
+// Fetch the current user's own signature status (not the image itself, to keep /me lightweight)
+router.get('/signature-status', isLoggedIn, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT (signature_image IS NOT NULL) AS has_signature FROM users WHERE id = $1', [req.user.id])
+    return res.json({ hasSignature: result.rows[0]?.has_signature || false })
+  } catch (error) {
+    return res.status(500).json({ error: 'Unable to check signature status.' })
+  }
+})
+
 router.patch('/change-password', isLoggedIn, async (req, res) => {
   const currentPassword = String(req.body.currentPassword || req.body.oldPassword || '')
   const newPassword = String(req.body.newPassword || '')
