@@ -68,61 +68,125 @@ function buildBody(act) {
   return { opening, body, closing };
 }
 
-/* ── Signature Pad with upload option ── */
-const SignaturePad = ({ onSave, existingSignature }) => {
+/* ── Signature Pad with smooth curve drawing & upload ── */
+const SignaturePad = ({ onSave, existingSignature, isHod }) => {
   const canvasRef = useRef(null);
   const isDrawingRef = useRef(false);
-  const lastPosRef = useRef(null);
+  const pointsRef = useRef([]);
+  const historyRef = useRef([]);
   const [mode, setMode] = useState('draw'); // 'draw' | 'upload'
+  const [penColor, setPenColor] = useState('#1a365d');
+  const [lineWidth, setLineWidth] = useState(2.8);
+  const [hasDrawn, setHasDrawn] = useState(false);
   const [uploadedPreview, setUploadedPreview] = useState(null);
+  const [saveToProfile, setSaveToProfile] = useState(true);
   const fileInputRef = useRef(null);
+
+  const colors = [
+    { label: 'Navy Blue', value: '#1a365d' },
+    { label: 'Charcoal Black', value: '#0f172a' },
+    { label: 'Royal Blue', value: '#2563eb' }
+  ];
+
+  const widths = [
+    { label: 'Fine', value: 1.8 },
+    { label: 'Medium', value: 2.8 },
+    { label: 'Bold', value: 4.2 }
+  ];
 
   const getPos = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();
-    // scale from CSS pixels to canvas pixels
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     return {
       x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY,
+      y: (clientY - rect.top) * scaleY
     };
+  };
+
+  const saveCanvasState = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    historyRef.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    if (historyRef.current.length > 20) historyRef.current.shift();
   };
 
   const startDraw = (e) => {
     e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    saveCanvasState();
     isDrawingRef.current = true;
-    lastPosRef.current = getPos(e, canvasRef.current);
+    const pos = getPos(e, canvas);
+    pointsRef.current = [pos];
+    const ctx = canvas.getContext('2d');
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, lineWidth / 2, 0, Math.PI * 2);
+    ctx.fillStyle = penColor;
+    ctx.fill();
+    setHasDrawn(true);
   };
 
   const draw = (e) => {
     if (!isDrawingRef.current) return;
     e.preventDefault();
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
+    if (!canvas) return;
     const pos = getPos(e, canvas);
-    ctx.beginPath();
-    ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
-    ctx.lineTo(pos.x, pos.y);
-    ctx.strokeStyle = '#1a365d';
-    ctx.lineWidth = 2.8;
+    pointsRef.current.push(pos);
+    const ctx = canvas.getContext('2d');
+    ctx.strokeStyle = penColor;
+    ctx.lineWidth = lineWidth;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.stroke();
-    lastPosRef.current = pos;
+
+    const pts = pointsRef.current;
+    if (pts.length >= 3) {
+      const xc = (pts[pts.length - 2].x + pts[pts.length - 1].x) / 2;
+      const yc = (pts[pts.length - 2].y + pts[pts.length - 1].y) / 2;
+      ctx.beginPath();
+      ctx.moveTo(pts[pts.length - 3].x, pts[pts.length - 3].y);
+      ctx.quadraticCurveTo(pts[pts.length - 2].x, pts[pts.length - 2].y, xc, yc);
+      ctx.stroke();
+    } else if (pts.length === 2) {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      ctx.lineTo(pts[1].x, pts[1].y);
+      ctx.stroke();
+    }
   };
 
-  const stopDraw = () => { isDrawingRef.current = false; };
+  const stopDraw = () => {
+    if (!isDrawingRef.current) return;
+    isDrawingRef.current = false;
+    pointsRef.current = [];
+  };
+
+  const undoLast = () => {
+    const canvas = canvasRef.current;
+    if (!canvas || historyRef.current.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    const prevState = historyRef.current.pop();
+    ctx.putImageData(prevState, 0, 0);
+    if (historyRef.current.length === 0) setHasDrawn(false);
+  };
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
-    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    if (!canvas) return;
+    saveCanvasState();
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasDrawn(false);
   };
 
   const useDrawn = () => {
+    if (!canvasRef.current || !hasDrawn) return;
     const dataUrl = canvasRef.current.toDataURL('image/png');
-    onSave(dataUrl);
+    onSave(dataUrl, saveToProfile);
   };
 
   const handleFileUpload = (e) => {
@@ -136,16 +200,16 @@ const SignaturePad = ({ onSave, existingSignature }) => {
   };
 
   const useUploaded = () => {
-    if (uploadedPreview) onSave(uploadedPreview);
+    if (uploadedPreview) onSave(uploadedPreview, saveToProfile);
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {/* Mode Toggle */}
-      <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '3px', gap: '3px' }}>
-        {[['draw', '✍️ Draw Signature'], ['upload', '📁 Upload Image']].map(([m, label]) => (
+      <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '3px', gap: '4px' }}>
+        {[['draw', '✍️ Draw Signature Canvas'], ['upload', '📁 Upload Image File']].map(([m, label]) => (
           <button key={m} type="button" onClick={() => setMode(m)}
-            style={{ flex: 1, padding: '8px 12px', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
+            style={{ flex: 1, padding: '9px 14px', border: 'none', borderRadius: '6px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s',
               background: mode === m ? '#1a365d' : 'transparent',
               color: mode === m ? '#fff' : '#64748b' }}>
             {label}
@@ -154,38 +218,74 @@ const SignaturePad = ({ onSave, existingSignature }) => {
       </div>
 
       {existingSignature && (
-        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src={existingSignature} alt="Profile signature" style={{ height: '38px', maxWidth: '150px', objectFit: 'contain', background: '#fff', padding: '2px', border: '1px solid #e2e8f0', borderRadius: '4px' }} />
+        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <img src={existingSignature} alt="Profile signature" style={{ height: '40px', maxWidth: '140px', objectFit: 'contain', background: '#fff', padding: '3px', border: '1px solid #e2e8f0', borderRadius: '4px' }} />
           <div>
-            <div style={{ fontSize: '11px', color: '#15803d', fontWeight: 700 }}>Profile signature is set</div>
-            <div style={{ fontSize: '10px', color: '#64748b' }}>Draw or upload below to override for this session only</div>
+            <div style={{ fontSize: '11.5px', color: '#15803d', fontWeight: 700 }}>Profile signature is configured</div>
+            <div style={{ fontSize: '10.5px', color: '#64748b' }}>You can draw or upload below to customize for this letter or update your default</div>
           </div>
         </div>
       )}
 
       {mode === 'draw' && (
         <>
-          <div style={{ border: '2px dashed #94a3b8', borderRadius: '10px', background: '#fafbff', overflow: 'hidden', touchAction: 'none', position: 'relative' }}>
-            <canvas ref={canvasRef} width={540} height={130}
-              style={{ display: 'block', width: '100%', cursor: 'crosshair', userSelect: 'none' }}
+          {/* Controls toolbar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>Pen Color:</span>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                {colors.map(c => (
+                  <button key={c.value} type="button" onClick={() => setPenColor(c.value)}
+                    style={{ width: '22px', height: '22px', borderRadius: '50%', background: c.value, border: penColor === c.value ? '2px solid #f59e0b' : '1px solid #cbd5e1', cursor: 'pointer', transform: penColor === c.value ? 'scale(1.15)' : 'none' }}
+                    title={c.label} />
+                ))}
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>Stroke:</span>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                {widths.map(w => (
+                  <button key={w.value} type="button" onClick={() => setLineWidth(w.value)}
+                    style={{ padding: '2px 8px', borderRadius: '4px', border: lineWidth === w.value ? '1.5px solid #1a365d' : '1px solid #e2e8f0', background: lineWidth === w.value ? '#eff6ff' : '#fff', color: lineWidth === w.value ? '#1a365d' : '#64748b', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>
+                    {w.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button type="button" onClick={undoLast}
+              style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '11.5px', color: '#475569', cursor: 'pointer', fontWeight: 600 }}>
+              ↩ Undo
+            </button>
+          </div>
+
+          <div style={{ border: '2px dashed #94a3b8', borderRadius: '10px', background: '#fafcff', overflow: 'hidden', touchAction: 'none', position: 'relative' }}>
+            <canvas ref={canvasRef} width={640} height={160}
+              style={{ display: 'block', width: '100%', height: '160px', cursor: 'crosshair', userSelect: 'none' }}
               onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
               onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
             />
-            <div style={{ position: 'absolute', bottom: 6, right: 8, fontSize: '10px', color: '#cbd5e1', pointerEvents: 'none' }}>
-              Draw here →
-            </div>
+            {!hasDrawn && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', color: '#94a3b8', fontSize: '13px', fontWeight: 500 }}>
+                ✍️ Draw your signature here using mouse or touch screen
+              </div>
+            )}
           </div>
-          <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>
-            Use mouse to draw · On mobile, use your finger
-          </div>
+
+          {isHod && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#1e293b', cursor: 'pointer', userSelect: 'none', background: '#f8fafc', padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+              <input type="checkbox" checked={saveToProfile} onChange={e => setSaveToProfile(e.target.checked)} />
+              <span><strong>Save permanently to my HOD profile</strong> (will auto-apply to all future letters)</span>
+            </label>
+          )}
+
           <div style={{ display: 'flex', gap: '8px' }}>
             <button type="button" onClick={clearCanvas}
-              style={{ flex: 1, padding: '9px', border: '1.5px solid #e2e8f0', borderRadius: '8px', background: '#fff', fontSize: '13px', color: '#64748b', cursor: 'pointer', fontWeight: 600 }}>
-              🗑 Clear
+              style={{ flex: 1, padding: '10px', border: '1.5px solid #cbd5e1', borderRadius: '8px', background: '#fff', fontSize: '13px', color: '#64748b', cursor: 'pointer', fontWeight: 600 }}>
+              🗑 Clear Canvas
             </button>
-            <button type="button" onClick={useDrawn}
-              style={{ flex: 2, padding: '9px', border: 'none', borderRadius: '8px', background: 'linear-gradient(135deg,#1a365d,#2a4d8f)', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
-              ✅ Use This Signature
+            <button type="button" onClick={useDrawn} disabled={!hasDrawn}
+              style={{ flex: 2, padding: '10px', border: 'none', borderRadius: '8px', background: !hasDrawn ? '#cbd5e1' : 'linear-gradient(135deg,#1a365d,#2a4d8f)', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: !hasDrawn ? 'not-allowed' : 'pointer' }}>
+              ✅ Apply This Signature
             </button>
           </div>
         </>
@@ -195,30 +295,38 @@ const SignaturePad = ({ onSave, existingSignature }) => {
         <>
           <div
             onClick={() => fileInputRef.current?.click()}
-            style={{ border: '2px dashed #94a3b8', borderRadius: '10px', background: '#fafbff', minHeight: '100px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', transition: 'border-color 0.2s' }}
+            style={{ border: '2px dashed #94a3b8', borderRadius: '10px', background: '#fafcff', minHeight: '130px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', padding: '20px', transition: 'border-color 0.2s' }}
             onMouseEnter={e => e.currentTarget.style.borderColor = '#1a365d'}
             onMouseLeave={e => e.currentTarget.style.borderColor = '#94a3b8'}
           >
             {uploadedPreview ? (
-              <img src={uploadedPreview} alt="Uploaded signature" style={{ maxHeight: '90px', maxWidth: '280px', objectFit: 'contain', borderRadius: '4px' }} />
+              <img src={uploadedPreview} alt="Uploaded signature" style={{ maxHeight: '100px', maxWidth: '300px', objectFit: 'contain', borderRadius: '4px', background: '#fff', padding: '6px', border: '1px solid #e2e8f0' }} />
             ) : (
               <>
-                <div style={{ fontSize: '28px' }}>📂</div>
-                <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Click to upload signature image</div>
-                <div style={{ fontSize: '11px', color: '#94a3b8' }}>PNG, JPG, or GIF — transparent background preferred</div>
+                <div style={{ fontSize: '32px' }}>📂</div>
+                <div style={{ fontSize: '13.5px', color: '#1a365d', fontWeight: 700 }}>Click to browse signature image</div>
+                <div style={{ fontSize: '11px', color: '#64748b' }}>Supports PNG, JPG, or GIF (transparent PNG recommended)</div>
               </>
             )}
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} style={{ display: 'none' }} />
           </div>
+
+          {isHod && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#1e293b', cursor: 'pointer', userSelect: 'none', background: '#f8fafc', padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+              <input type="checkbox" checked={saveToProfile} onChange={e => setSaveToProfile(e.target.checked)} />
+              <span><strong>Save permanently to my HOD profile</strong> (will auto-apply to all future letters)</span>
+            </label>
+          )}
+
           {uploadedPreview && (
             <div style={{ display: 'flex', gap: '8px' }}>
               <button type="button" onClick={() => { setUploadedPreview(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
-                style={{ flex: 1, padding: '9px', border: '1.5px solid #e2e8f0', borderRadius: '8px', background: '#fff', fontSize: '13px', color: '#64748b', cursor: 'pointer', fontWeight: 600 }}>
+                style={{ flex: 1, padding: '10px', border: '1.5px solid #cbd5e1', borderRadius: '8px', background: '#fff', fontSize: '13px', color: '#64748b', cursor: 'pointer', fontWeight: 600 }}>
                 🗑 Remove
               </button>
               <button type="button" onClick={useUploaded}
-                style={{ flex: 2, padding: '9px', border: 'none', borderRadius: '8px', background: 'linear-gradient(135deg,#1a365d,#2a4d8f)', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
-                ✅ Use This Signature
+                style={{ flex: 2, padding: '10px', border: 'none', borderRadius: '8px', background: 'linear-gradient(135deg,#1a365d,#2a4d8f)', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+                ✅ Apply Uploaded Signature
               </button>
             </div>
           )}
@@ -246,7 +354,7 @@ const LetterPreview = ({ act, edits, hodSignature, drawnSignature }) => {
   const recipientRole = act.staff_designation || (String(act.faculty_role || '').toLowerCase().includes('club') ? 'Club Representative' : 'Faculty Member');
 
   return (
-    <div style={{ background: '#fff', border: '2.5px solid #1a365d', borderRadius: '2px', padding: '28px 32px 24px', fontFamily: 'Georgia, serif', fontSize: '10.5px', color: '#1e293b', boxShadow: '0 4px 24px rgba(0,0,0,0.13)', position: 'relative', minHeight: '900px' }}>
+    <div style={{ background: '#fff', border: '2.5px solid #1a365d', borderRadius: '2px', padding: '28px 32px 24px', fontFamily: 'Georgia, serif', fontSize: '10.5px', color: '#1e293b', boxShadow: '0 4px 24px rgba(0,0,0,0.13)', position: 'relative', minHeight: '880px' }}>
       <div style={{ position: 'absolute', inset: '5px', border: '1px solid #b7791f', borderRadius: '1px', pointerEvents: 'none' }} />
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '10px' }}>
         <div style={{ flexShrink: 0, width: '50px', height: '50px', background: '#1a365d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: '14px' }}>WCE</div>
@@ -348,6 +456,22 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
 
   const autoText = activity ? buildBody(activity) : {};
 
+  const handleSignatureCaptured = async (sigData, saveToProfile) => {
+    setDrawnSignature(sigData);
+    if (saveToProfile && isHod) {
+      try {
+        await api.put('/auth/profile', { signature_image: sigData });
+        setHodSignature(sigData);
+        showNotification?.('Signature saved to your profile and applied to letter!');
+      } catch {
+        showNotification?.('Signature applied for this session (profile update failed).', 'warning');
+      }
+    } else {
+      showNotification?.('Signature captured! Switched to Preview tab.');
+    }
+    setActiveTab('preview');
+  };
+
   const handleDownload = async () => {
     setDownloading(true);
     try {
@@ -370,7 +494,7 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
       } else {
         response = await api.get(`/activity/${activityId}/appreciation-letter`, { responseType: 'blob' });
       }
-      const safeName = String(activityTitle || 'activity').replace(/[^a-zA-Z0-9 -]/g, '').trim().replace(/\s+/g, '-').toLowerCase().slice(0, 40);
+      const safeName = String(activityTitle || activity?.title || 'activity').replace(/[^a-zA-Z0-9 -]/g, '').trim().replace(/\s+/g, '-').toLowerCase().slice(0, 40);
       downloadResponse(response, `appreciation-letter-${activityId}-${safeName}.pdf`);
       showNotification?.('Appreciation letter downloaded successfully!');
     } catch (err) {
@@ -418,7 +542,7 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: '#90b4d8', marginBottom: '2px' }}>Official Appreciation Letter</div>
-            <div style={{ fontWeight: 800, fontSize: '15px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activityTitle || 'Faculty Activity'}</div>
+            <div style={{ fontWeight: 800, fontSize: '15px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activityTitle || activity?.title || 'Faculty Activity'}</div>
           </div>
           {isHod && <div style={{ background: '#f59e0b', color: '#78350f', padding: '4px 10px', borderRadius: '20px', fontSize: '10px', fontWeight: 800, flexShrink: 0 }}>HOD MODE</div>}
           <button type="button" onClick={onClose}
@@ -438,7 +562,7 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
           {/* PREVIEW TAB */}
           {activeTab === 'preview' && (
             <div style={{ padding: '20px', maxWidth: '700px', margin: '0 auto' }}>
-              {activity.workflow_status !== 'Approved' && (
+              {activity?.workflow_status !== 'Approved' && (
                 <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '12px', color: '#92400e', fontWeight: 600, display: 'flex', gap: '8px', alignItems: 'center' }}>
                   ⚠️ <span>This activity is not yet approved. The letter shown is a preview only.</span>
                 </div>
@@ -508,17 +632,14 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
 
           {/* SIGNATURE TAB (HOD only) */}
           {activeTab === 'sign' && isHod && (
-            <div style={{ padding: '20px', maxWidth: '640px', margin: '0 auto' }}>
+            <div style={{ padding: '20px', maxWidth: '680px', margin: '0 auto' }}>
               <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '14px', marginBottom: '20px', fontSize: '12.5px', color: '#166534' }}>
-                <strong>Add Your Signature:</strong> Draw your signature with mouse/finger, or upload an image. This will appear in the downloaded PDF. To save permanently to your profile, go to My Profile → HOD Digital Signature.
+                <strong>Add Your Signature:</strong> Draw smoothly with your mouse or touch screen, or upload a clear signature image. Check "Save to my HOD profile" to store it permanently for all future letters.
               </div>
               <SignaturePad
                 existingSignature={hodSignature}
-                onSave={(sig) => {
-                  setDrawnSignature(sig);
-                  showNotification?.('Signature captured! Check the Preview tab.');
-                  setActiveTab('preview');
-                }}
+                isHod={isHod}
+                onSave={handleSignatureCaptured}
               />
               {drawnSignature && (
                 <div style={{ marginTop: '16px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -538,8 +659,8 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
         {/* Footer actions */}
         <div style={{ borderTop: '1px solid #e2e8f0', background: '#fff', padding: '12px 20px', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <button type="button" onClick={onClose}
-              style={{ padding: '9px 20px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff', fontSize: '13px', color: '#64748b', cursor: 'pointer', fontWeight: 600 }}>
+            <button className="btn btn-secondary" type="button" onClick={onClose}
+              style={{ padding: '9px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}>
               Close
             </button>
             {isHod && (

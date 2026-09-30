@@ -95,6 +95,9 @@ const clientBuild = path.join(__dirname, '../client/dist')
 if (fs.existsSync(path.join(clientBuild, 'index.html'))) {
   app.use(express.static(clientBuild, { maxAge: isProduction ? '1d' : 0, index: false }))
   app.get('*', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    res.setHeader('Pragma', 'no-cache')
+    res.setHeader('Expires', '0')
     res.sendFile(path.join(clientBuild, 'index.html'))
   })
 } else {

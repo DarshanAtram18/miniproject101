@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Icon from './Icon';
+import AppreciationLetterModal from './AppreciationLetterModal';
 import api, { downloadResponse } from '../api';
 import { formatBytes, humanize } from '../utils';
 
@@ -10,21 +11,9 @@ const formatDateDMY = (dateStr) => {
   return dateStr;
 };
 
-const SummaryViewModal = ({ activity, onClose, onDownload, downloading }) => {
-  const [apprDownloading, setApprDownloading] = useState(false);
+const SummaryViewModal = ({ activity, onClose, onDownload, downloading, user, showNotification }) => {
+  const [showLetterModal, setShowLetterModal] = useState(false);
   if (!activity) return null;
-
-  const downloadAppreciation = async () => {
-    setApprDownloading(true);
-    try {
-      const response = await api.get(`/activity/${activity.act_id}/appreciation-letter`, { responseType: 'blob' });
-      downloadResponse(response, `appreciation-letter-${activity.act_id}.pdf`);
-    } catch {
-      alert('Appreciation letter is available for approved activities.');
-    } finally {
-      setApprDownloading(false);
-    }
-  };
 
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   const attachments = activity.attachments || [];
@@ -272,12 +261,10 @@ const SummaryViewModal = ({ activity, onClose, onDownload, downloading }) => {
               className="btn btn-secondary btn-sm"
               type="button"
               style={{ background: '#fef3c7', borderColor: '#fde68a', color: '#92400e', fontWeight: 650 }}
-              disabled={apprDownloading}
-              onClick={downloadAppreciation}
-              title="Download official Appreciation Letter with HOD approval and digital signature"
+              onClick={() => setShowLetterModal(true)}
+              title="View, edit and download official Appreciation Letter with HOD approval and digital signature"
             >
-              {apprDownloading ? <span className="button-spinner" /> : <Icon name="award" size={14} />}
-              {apprDownloading ? 'Generating…' : 'Appreciation Letter (PDF)'}
+              <Icon name="award" size={14} /> Appreciation Letter
             </button>
           )}
           {onDownload && (
@@ -288,6 +275,16 @@ const SummaryViewModal = ({ activity, onClose, onDownload, downloading }) => {
           )}
         </div>
       </div>
+
+      {showLetterModal && (
+        <AppreciationLetterModal
+          activityId={activity.act_id}
+          activityTitle={activity.title}
+          user={user}
+          onClose={() => setShowLetterModal(false)}
+          showNotification={showNotification}
+        />
+      )}
     </div>
   );
 };

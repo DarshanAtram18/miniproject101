@@ -3,6 +3,7 @@ import api, { downloadResponse, getBlobErrorMessage } from '../api';
 import Icon from './Icon';
 import DetailedReportModal from './DetailedReportModal';
 import SummaryViewModal from './SummaryViewModal';
+import AppreciationLetterModal from './AppreciationLetterModal';
 import { currentAcademicYears } from '../utils';
 
 const Reports = ({ user, catalog, records, total, onDownload, showNotification }) => {
@@ -11,6 +12,7 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
   const [selectedSingleActId, setSelectedSingleActId] = useState('');
   const [detailedModalRecord, setDetailedModalRecord] = useState(null);
   const [summaryModalRecord, setSummaryModalRecord] = useState(null);
+  const [appreciationModalRecord, setAppreciationModalRecord] = useState(null);
   const [summaryDownloading, setSummaryDownloading] = useState(false);
   const [filters, setFilters] = useState({
     academicYear: currentAcademicYears()[0],
@@ -61,22 +63,10 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
     }
   };
 
-  const downloadSingleAppreciation = async (recordId) => {
+  const openSingleAppreciation = (recordId) => {
     const found = records.find((r) => String(r.act_id) === String(recordId));
-    if (!found) return;
-    setAppreciationDownloading(true);
-    try {
-      const response = await api.get(`/activity/${found.act_id}/appreciation-letter`, { responseType: 'blob' });
-      downloadResponse(response, `appreciation-letter-${found.act_id}.pdf`);
-      showNotification?.('Appreciation letter downloaded successfully.');
-    } catch {
-      if (showNotification) {
-        showNotification('Appreciation letter is available for approved activities.', 'error');
-      } else {
-        alert('Appreciation letter is available for approved activities.');
-      }
-    } finally {
-      setAppreciationDownloading(false);
+    if (found) {
+      setAppreciationModalRecord(found);
     }
   };
 
@@ -327,11 +317,11 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
                 <button
                   className="btn btn-warning"
                   type="button"
-                  disabled={!selectedSingleActId || appreciationDownloading}
-                  onClick={() => downloadSingleAppreciation(selectedSingleActId)}
-                  title="Download HOD Approved Appreciation Letter"
+                  disabled={!selectedSingleActId}
+                  onClick={() => openSingleAppreciation(selectedSingleActId)}
+                  title="View, edit and download HOD Approved Appreciation Letter"
                 >
-                  {appreciationDownloading ? <span className="button-spinner dark" /> : <Icon name="award" size={16} />}
+                  <Icon name="award" size={16} />
                   Appreciation Letter (PDF)
                 </button>
               </div>
@@ -373,6 +363,18 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
           onClose={() => setSummaryModalRecord(null)}
           onDownload={() => downloadSingleSummary(summaryModalRecord)}
           downloading={summaryDownloading}
+          user={user}
+          showNotification={showNotification}
+        />
+      )}
+
+      {appreciationModalRecord && (
+        <AppreciationLetterModal
+          activityId={appreciationModalRecord.act_id}
+          activityTitle={appreciationModalRecord.title}
+          user={user}
+          onClose={() => setAppreciationModalRecord(null)}
+          showNotification={showNotification}
         />
       )}
     </div>
