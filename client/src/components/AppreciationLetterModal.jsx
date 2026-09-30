@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api, { downloadResponse, getBlobErrorMessage } from '../api';
 import Icon from './Icon';
+import wceLogo from '../assets/wce-logo.png';
 
 /* ── helpers ── */
 const fmtDate = (d) => {
@@ -357,7 +358,11 @@ const LetterPreview = ({ act, edits, hodSignature, drawnSignature }) => {
     <div style={{ background: '#fff', border: '2.5px solid #1a365d', borderRadius: '2px', padding: '28px 32px 24px', fontFamily: 'Georgia, serif', fontSize: '10.5px', color: '#1e293b', boxShadow: '0 4px 24px rgba(0,0,0,0.13)', position: 'relative', minHeight: '880px' }}>
       <div style={{ position: 'absolute', inset: '5px', border: '1px solid #b7791f', borderRadius: '1px', pointerEvents: 'none' }} />
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '10px' }}>
-        <div style={{ flexShrink: 0, width: '50px', height: '50px', background: '#1a365d', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: '14px' }}>WCE</div>
+        <img
+          src={wceLogo || '/wce-logo.png'}
+          alt="Walchand College of Engineering Logo"
+          style={{ flexShrink: 0, width: '56px', height: '56px', objectFit: 'contain' }}
+        />
         <div style={{ flex: 1 }}>
           <div style={{ color: '#1a365d', fontWeight: 900, fontSize: '12.5px', fontFamily: 'Arial, sans-serif' }}>WALCHAND COLLEGE OF ENGINEERING, SANGLI</div>
           <div style={{ color: '#64748b', fontSize: '8px', fontFamily: 'Arial, sans-serif', marginTop: '1px' }}>(An Autonomous Institute - Government Aided - Established 1947)</div>
