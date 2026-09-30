@@ -363,6 +363,7 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
           activity={detailedModalRecord}
           user={user}
           onClose={() => setDetailedModalRecord(null)}
+          showNotification={showNotification}
         />
       )}
 

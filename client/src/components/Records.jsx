@@ -21,7 +21,8 @@ const Records = ({
   onEdit,
   onDelete,
   onReview,
-  navigate
+  navigate,
+  showNotification
 }) => {
   const isReviewer = ['HOD', 'Admin'].includes(user.role);
   const [filters, setFilters] = useState({ search: '', type: '', academicYear: '', status: '', scope: '', page: 1 });
@@ -346,6 +347,7 @@ const Records = ({
           activity={detailedReportActivity}
           user={user}
           onClose={() => setDetailedReportActivity(null)}
+          showNotification={showNotification}
         />
       )}
 

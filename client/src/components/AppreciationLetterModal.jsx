@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import api, { downloadResponse, getBlobErrorMessage } from '../api';
 import Icon from './Icon';
 
+/* ── helpers ── */
 const fmtDate = (d) => {
   if (!d) return '-';
   const s = String(d).split('T')[0];
@@ -16,6 +17,7 @@ const fmtRange = (act) => {
   return e ? `${s} to ${e}` : s;
 };
 
+/* ── auto letter text ── */
 function buildBody(act) {
   const role = String(act.faculty_role || '').toLowerCase();
   const scope = String(act.scope || '').toLowerCase();
@@ -49,9 +51,9 @@ function buildBody(act) {
   const participantsSentence = participants && Number(participants) > 0 ? ` The activity benefited ${participants} participants, directly contributing to the enrichment of our academic community.` : '';
   let typeSpecific = 'Your consistent efforts in enriching the academic and professional environment of our department reflect the highest ideals of a dedicated educator and researcher.';
   if (type.includes('fdp') || type.includes('faculty development') || type.includes('training'))
-    typeSpecific = `Your commitment to continuous professional development and lifelong learning is an inspiration to colleagues and students alike. Attending and ${roleDesc === 'organiser and coordinator' ? 'organising' : 'participating in'} such programmes directly strengthens our department\'s academic capacity and research culture.`;
+    typeSpecific = `Your commitment to continuous professional development and lifelong learning is an inspiration to colleagues and students alike. Attending and ${roleDesc === 'organiser and coordinator' ? 'organising' : 'participating in'} such programmes directly strengthens our department's academic capacity and research culture.`;
   else if (type.includes('research') || type.includes('publication') || type.includes('paper') || type.includes('journal'))
-    typeSpecific = `Research dissemination at ${act.scope || 'reputed'} forums is a cornerstone of academic excellence. Your scholarly contribution advances the department\'s research profile and brings recognition to Walchand College of Engineering on the ${act.scope || 'academic'} stage.`;
+    typeSpecific = `Research dissemination at ${act.scope || 'reputed'} forums is a cornerstone of academic excellence. Your scholarly contribution advances the department's research profile and brings recognition to Walchand College of Engineering on the ${act.scope || 'academic'} stage.`;
   else if (type.includes('guest') || type.includes('lecture') || type.includes('seminar'))
     typeSpecific = 'Organising distinguished guest sessions bridges the gap between industry and academia, and provides students with invaluable exposure to expert practitioners and thought leaders. Your role in facilitating this knowledge exchange is deeply valued.';
   else if (type.includes('workshop') || type.includes('conference') || type.includes('symposium'))
@@ -66,52 +68,167 @@ function buildBody(act) {
   return { opening, body, closing };
 }
 
-const SignaturePad = ({ onSave, onClear, existingSignature }) => {
+/* ── Signature Pad with upload option ── */
+const SignaturePad = ({ onSave, existingSignature }) => {
   const canvasRef = useRef(null);
   const isDrawingRef = useRef(false);
   const lastPosRef = useRef(null);
+  const [mode, setMode] = useState('draw'); // 'draw' | 'upload'
+  const [uploadedPreview, setUploadedPreview] = useState(null);
+  const fileInputRef = useRef(null);
+
   const getPos = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();
+    // scale from CSS pixels to canvas pixels
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    return { x: clientX - rect.left, y: clientY - rect.top };
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    };
   };
-  const startDraw = (e) => { e.preventDefault(); isDrawingRef.current = true; lastPosRef.current = getPos(e, canvasRef.current); };
+
+  const startDraw = (e) => {
+    e.preventDefault();
+    isDrawingRef.current = true;
+    lastPosRef.current = getPos(e, canvasRef.current);
+  };
+
   const draw = (e) => {
     if (!isDrawingRef.current) return;
     e.preventDefault();
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const pos = getPos(e, canvas);
-    ctx.beginPath(); ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y); ctx.lineTo(pos.x, pos.y);
-    ctx.strokeStyle = '#1a365d'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.strokeStyle = '#1a365d';
+    ctx.lineWidth = 2.8;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
     lastPosRef.current = pos;
   };
+
   const stopDraw = () => { isDrawingRef.current = false; };
-  const clearCanvas = () => { canvasRef.current.getContext('2d').clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); onClear?.(); };
-  const saveSignature = () => { onSave(canvasRef.current.toDataURL('image/png')); };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const useDrawn = () => {
+    const dataUrl = canvasRef.current.toDataURL('image/png');
+    onSave(dataUrl);
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setUploadedPreview(ev.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const useUploaded = () => {
+    if (uploadedPreview) onSave(uploadedPreview);
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {/* Mode Toggle */}
+      <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '8px', padding: '3px', gap: '3px' }}>
+        {[['draw', '✍️ Draw Signature'], ['upload', '📁 Upload Image']].map(([m, label]) => (
+          <button key={m} type="button" onClick={() => setMode(m)}
+            style={{ flex: 1, padding: '8px 12px', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s',
+              background: mode === m ? '#1a365d' : 'transparent',
+              color: mode === m ? '#fff' : '#64748b' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
       {existingSignature && (
-        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <img src={existingSignature} alt="Uploaded signature" style={{ height: '40px', maxWidth: '160px', objectFit: 'contain', background: '#fff', padding: '2px', border: '1px solid #e2e8f0', borderRadius: '4px' }} />
-          <span style={{ fontSize: '11px', color: '#15803d', fontWeight: 600 }}>Profile signature uploaded - draw a session-only override below</span>
+        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <img src={existingSignature} alt="Profile signature" style={{ height: '38px', maxWidth: '150px', objectFit: 'contain', background: '#fff', padding: '2px', border: '1px solid #e2e8f0', borderRadius: '4px' }} />
+          <div>
+            <div style={{ fontSize: '11px', color: '#15803d', fontWeight: 700 }}>Profile signature is set</div>
+            <div style={{ fontSize: '10px', color: '#64748b' }}>Draw or upload below to override for this session only</div>
+          </div>
         </div>
       )}
-      <div style={{ border: '2px dashed #cbd5e1', borderRadius: '8px', background: '#fafbff', touchAction: 'none', overflow: 'hidden' }}>
-        <canvas ref={canvasRef} width={480} height={110} style={{ display: 'block', width: '100%', cursor: 'crosshair' }}
-          onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
-          onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw} />
-      </div>
-      <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>Draw your signature above with mouse or finger</div>
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <button type="button" onClick={clearCanvas} style={{ flex: 1, padding: '8px', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#fff', fontSize: '12px', color: '#64748b', cursor: 'pointer' }}>Clear</button>
-        <button type="button" onClick={saveSignature} style={{ flex: 2, padding: '8px', border: 'none', borderRadius: '6px', background: '#1a365d', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>Use This Signature</button>
-      </div>
+
+      {mode === 'draw' && (
+        <>
+          <div style={{ border: '2px dashed #94a3b8', borderRadius: '10px', background: '#fafbff', overflow: 'hidden', touchAction: 'none', position: 'relative' }}>
+            <canvas ref={canvasRef} width={540} height={130}
+              style={{ display: 'block', width: '100%', cursor: 'crosshair', userSelect: 'none' }}
+              onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
+              onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw}
+            />
+            <div style={{ position: 'absolute', bottom: 6, right: 8, fontSize: '10px', color: '#cbd5e1', pointerEvents: 'none' }}>
+              Draw here →
+            </div>
+          </div>
+          <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>
+            Use mouse to draw · On mobile, use your finger
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button type="button" onClick={clearCanvas}
+              style={{ flex: 1, padding: '9px', border: '1.5px solid #e2e8f0', borderRadius: '8px', background: '#fff', fontSize: '13px', color: '#64748b', cursor: 'pointer', fontWeight: 600 }}>
+              🗑 Clear
+            </button>
+            <button type="button" onClick={useDrawn}
+              style={{ flex: 2, padding: '9px', border: 'none', borderRadius: '8px', background: 'linear-gradient(135deg,#1a365d,#2a4d8f)', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+              ✅ Use This Signature
+            </button>
+          </div>
+        </>
+      )}
+
+      {mode === 'upload' && (
+        <>
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            style={{ border: '2px dashed #94a3b8', borderRadius: '10px', background: '#fafbff', minHeight: '100px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', transition: 'border-color 0.2s' }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = '#1a365d'}
+            onMouseLeave={e => e.currentTarget.style.borderColor = '#94a3b8'}
+          >
+            {uploadedPreview ? (
+              <img src={uploadedPreview} alt="Uploaded signature" style={{ maxHeight: '90px', maxWidth: '280px', objectFit: 'contain', borderRadius: '4px' }} />
+            ) : (
+              <>
+                <div style={{ fontSize: '28px' }}>📂</div>
+                <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Click to upload signature image</div>
+                <div style={{ fontSize: '11px', color: '#94a3b8' }}>PNG, JPG, or GIF — transparent background preferred</div>
+              </>
+            )}
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} style={{ display: 'none' }} />
+          </div>
+          {uploadedPreview && (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" onClick={() => { setUploadedPreview(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                style={{ flex: 1, padding: '9px', border: '1.5px solid #e2e8f0', borderRadius: '8px', background: '#fff', fontSize: '13px', color: '#64748b', cursor: 'pointer', fontWeight: 600 }}>
+                🗑 Remove
+              </button>
+              <button type="button" onClick={useUploaded}
+                style={{ flex: 2, padding: '9px', border: 'none', borderRadius: '8px', background: 'linear-gradient(135deg,#1a365d,#2a4d8f)', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
+                ✅ Use This Signature
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 };
 
+/* ── Letter Preview ── */
 const LetterPreview = ({ act, edits, hodSignature, drawnSignature }) => {
   const auto = buildBody(act);
   const opening = edits.opening || auto.opening;
@@ -122,9 +239,12 @@ const LetterPreview = ({ act, edits, hodSignature, drawnSignature }) => {
   const dept = act.department || 'Computer Science and Engineering';
   const deptAbbr = dept.replace(/[^A-Z]/g, '').slice(0, 3) || 'CSE';
   const refCode = `WCE/${deptAbbr}/APPR/${act.acad_year || '2025-26'}/${String(act.act_id || 101).padStart(4, '0')}`;
-  const issueDateStr = act.reviewed_at ? new Date(act.reviewed_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+  const issueDateStr = act.reviewed_at
+    ? new Date(act.reviewed_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
+    : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
   const sigToShow = drawnSignature || hodSignature;
   const recipientRole = act.staff_designation || (String(act.faculty_role || '').toLowerCase().includes('club') ? 'Club Representative' : 'Faculty Member');
+
   return (
     <div style={{ background: '#fff', border: '2.5px solid #1a365d', borderRadius: '2px', padding: '28px 32px 24px', fontFamily: 'Georgia, serif', fontSize: '10.5px', color: '#1e293b', boxShadow: '0 4px 24px rgba(0,0,0,0.13)', position: 'relative', minHeight: '900px' }}>
       <div style={{ position: 'absolute', inset: '5px', border: '1px solid #b7791f', borderRadius: '1px', pointerEvents: 'none' }} />
@@ -163,7 +283,6 @@ const LetterPreview = ({ act, edits, hodSignature, drawnSignature }) => {
           <b>MODE AND SCOPE:</b><span>{[act.mode, act.scope ? act.scope + ' Level' : null].filter(Boolean).join(' / ') || 'Institute Level'}</span>
           {(act.host_organisation && act.host_organisation.toLowerCase() !== 'no') ? <><b>HOST / ORGANISER:</b><span>{act.host_organisation}{act.venue ? ' / ' + act.venue : ''}</span></> : null}
           {act.participant_count ? <><b>BENEFICIARIES:</b><span>{act.participant_count} Registered Participants</span></> : null}
-          {act.summary ? <><b>KEY HIGHLIGHT:</b><span>{String(act.summary).slice(0, 160)}{act.summary.length > 160 ? '...' : ''}</span></> : null}
         </div>
       </div>
       <p style={{ textAlign: 'justify', lineHeight: 1.65, marginBottom: '10px', fontSize: '10px', fontFamily: 'Arial, sans-serif' }}>{body}</p>
@@ -186,7 +305,7 @@ const LetterPreview = ({ act, edits, hodSignature, drawnSignature }) => {
             ) : (
               <div style={{ fontFamily: 'Georgia, serif', fontSize: '15px', color: '#14532d', fontStyle: 'italic', fontWeight: 700, marginBottom: '2px' }}>{reviewerName}</div>
             )}
-            {!sigToShow && <div style={{ fontSize: '7.5px', color: '#64748b', fontStyle: 'italic', marginBottom: '4px' }}>(Signature not yet uploaded)</div>}
+            {!sigToShow && <div style={{ fontSize: '7.5px', color: '#64748b', fontStyle: 'italic', marginBottom: '4px' }}>(Signature not yet added)</div>}
             <div style={{ fontWeight: 800, fontSize: '9px', color: '#166534', fontFamily: 'Arial, sans-serif' }}>{reviewerTitle}</div>
             <div style={{ fontSize: '8px', color: '#15803d', fontFamily: 'Arial, sans-serif' }}>{dept}</div>
             <div style={{ fontSize: '7.5px', color: '#166534', fontFamily: 'Arial, sans-serif', marginTop: '2px' }}>Approved: {issueDateStr}</div>
@@ -200,6 +319,7 @@ const LetterPreview = ({ act, edits, hodSignature, drawnSignature }) => {
   );
 };
 
+/* ── Main Modal ── */
 const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, showNotification }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -242,7 +362,11 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
       const hasOverrides = Object.keys(overrides).length > 0 || drawnSignature;
       let response;
       if (hasOverrides) {
-        response = await api.post(`/activity/${activityId}/appreciation-letter`, { overrides, customSignature: drawnSignature || undefined }, { responseType: 'blob' });
+        response = await api.post(
+          `/activity/${activityId}/appreciation-letter`,
+          { overrides, customSignature: drawnSignature || undefined },
+          { responseType: 'blob' }
+        );
       } else {
         response = await api.get(`/activity/${activityId}/appreciation-letter`, { responseType: 'blob' });
       }
@@ -259,7 +383,7 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
 
   const tabBtn = (id, label, badge) => (
     <button type="button" onClick={() => setActiveTab(id)}
-      style={{ padding: '9px 18px', border: 'none', borderBottom: activeTab === id ? '3px solid #1a365d' : '3px solid transparent', background: 'transparent', color: activeTab === id ? '#1a365d' : '#64748b', fontWeight: activeTab === id ? 800 : 500, fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}>
+      style={{ padding: '10px 18px', border: 'none', borderBottom: activeTab === id ? '3px solid #1a365d' : '3px solid transparent', background: 'transparent', color: activeTab === id ? '#1a365d' : '#64748b', fontWeight: activeTab === id ? 800 : 500, fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px', transition: 'color 0.15s' }}>
       {label}
       {badge && <span style={{ background: '#16a34a', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '10px' }}>{badge}</span>}
     </button>
@@ -286,44 +410,59 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.82)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px', backdropFilter: 'blur(4px)' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#f8fafc', borderRadius: '14px', width: '100%', maxWidth: isHod ? '1100px' : '700px', maxHeight: '96dvh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 64px rgba(0,0,0,0.45)', overflow: 'hidden' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#f8fafc', borderRadius: '14px', width: '100%', maxWidth: isHod ? '1100px' : '720px', maxHeight: '96dvh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 64px rgba(0,0,0,0.45)', overflow: 'hidden' }}>
+        {/* Header */}
         <div style={{ background: 'linear-gradient(135deg, #1a365d 0%, #2a4d8f 100%)', color: '#fff', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
           <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '10px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Icon name="award" size={22} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: '#90b4d8', marginBottom: '2px' }}>Appreciation Letter</div>
+            <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: '#90b4d8', marginBottom: '2px' }}>Official Appreciation Letter</div>
             <div style={{ fontWeight: 800, fontSize: '15px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activityTitle || 'Faculty Activity'}</div>
           </div>
           {isHod && <div style={{ background: '#f59e0b', color: '#78350f', padding: '4px 10px', borderRadius: '20px', fontSize: '10px', fontWeight: 800, flexShrink: 0 }}>HOD MODE</div>}
-          <button type="button" onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', color: '#fff', cursor: 'pointer', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, lineHeight: 1 }}>x</button>
+          <button type="button" onClick={onClose}
+            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '50%', width: '34px', height: '34px', color: '#fff', cursor: 'pointer', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, lineHeight: 1 }}>✕</button>
         </div>
+
+        {/* Tabs */}
         <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', background: '#fff', paddingLeft: '12px', flexShrink: 0, overflowX: 'auto' }}>
-          {tabBtn('preview', 'Preview Letter')}
-          {isHod && tabBtn('edit', 'Edit Content')}
-          {isHod && tabBtn('sign', 'Draw Signature', drawnSignature ? 'Done' : null)}
+          {tabBtn('preview', '👁 Preview Letter')}
+          {isHod && tabBtn('edit', '✏️ Edit Content')}
+          {isHod && tabBtn('sign', '✍️ Signature', drawnSignature ? '✓' : null)}
         </div>
+
+        {/* Tab content */}
         <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+
+          {/* PREVIEW TAB */}
           {activeTab === 'preview' && (
             <div style={{ padding: '20px', maxWidth: '700px', margin: '0 auto' }}>
               {activity.workflow_status !== 'Approved' && (
                 <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '12px', color: '#92400e', fontWeight: 600, display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <Icon name="alert" size={16} />
-                  <span>This activity is not yet approved. The letter shown is a preview only.</span>
+                  ⚠️ <span>This activity is not yet approved. The letter shown is a preview only.</span>
                 </div>
               )}
               {isHod && (edits.opening || edits.body || edits.closing) && (
                 <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '12px', color: '#1e40af', fontWeight: 600 }}>
-                  Custom edits are active and reflected in this preview.
+                  ✎ Custom edits are active and reflected in this preview.
+                </div>
+              )}
+              {drawnSignature && (
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '12px', color: '#166534', fontWeight: 600, display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <img src={drawnSignature} alt="Sig" style={{ height: '32px', objectFit: 'contain', background: '#fff', borderRadius: '4px', border: '1px solid #e2e8f0', padding: '2px' }} />
+                  Session signature ready — will appear in PDF
                 </div>
               )}
               <LetterPreview act={activity} edits={edits} hodSignature={hodSignature} drawnSignature={drawnSignature} />
             </div>
           )}
+
+          {/* EDIT TAB (HOD only) */}
           {activeTab === 'edit' && isHod && (
             <div style={{ padding: '20px', maxWidth: '820px', margin: '0 auto' }}>
               <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', padding: '14px', marginBottom: '20px', fontSize: '12.5px', color: '#1e40af' }}>
-                <strong>HOD Edit Mode:</strong> All fields are pre-filled with auto-generated content. Leave blank to keep auto-generated text. Changes appear live in the Preview tab.
+                <strong>HOD Edit Mode:</strong> Pre-filled with auto-generated content. Leave blank to use auto-generated text. Changes are reflected live in the Preview tab.
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {[
@@ -358,51 +497,67 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
                       style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '12px', boxSizing: 'border-box' }} />
                   </div>
                 </div>
-                <button type="button" onClick={() => setEdits({ opening: '', body: '', closing: '', reviewerName: activity?.reviewer_name || 'Dr. A. R. Surve', reviewerTitle: 'Head of Department' })}
+                <button type="button"
+                  onClick={() => setEdits({ opening: '', body: '', closing: '', reviewerName: activity?.reviewer_name || 'Dr. A. R. Surve', reviewerTitle: 'Head of Department' })}
                   style={{ alignSelf: 'flex-start', padding: '8px 18px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff', fontSize: '12px', color: '#64748b', cursor: 'pointer', fontWeight: 600 }}>
-                  Reset All to Auto-Generated
+                  ↺ Reset All to Auto-Generated
                 </button>
               </div>
             </div>
           )}
+
+          {/* SIGNATURE TAB (HOD only) */}
           {activeTab === 'sign' && isHod && (
-            <div style={{ padding: '20px', maxWidth: '620px', margin: '0 auto' }}>
+            <div style={{ padding: '20px', maxWidth: '640px', margin: '0 auto' }}>
               <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '14px', marginBottom: '20px', fontSize: '12.5px', color: '#166534' }}>
-                <strong>Session Signature:</strong> Draw your signature below for this download only. To save permanently, go to My Profile - HOD Digital Signature.
+                <strong>Add Your Signature:</strong> Draw your signature with mouse/finger, or upload an image. This will appear in the downloaded PDF. To save permanently to your profile, go to My Profile → HOD Digital Signature.
               </div>
-              <SignaturePad existingSignature={hodSignature}
-                onSave={(sig) => { setDrawnSignature(sig); showNotification?.('Signature captured! Check the Preview tab.'); setActiveTab('preview'); }}
-                onClear={() => setDrawnSignature(null)} />
+              <SignaturePad
+                existingSignature={hodSignature}
+                onSave={(sig) => {
+                  setDrawnSignature(sig);
+                  showNotification?.('Signature captured! Check the Preview tab.');
+                  setActiveTab('preview');
+                }}
+              />
               {drawnSignature && (
-                <div style={{ marginTop: '12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <img src={drawnSignature} alt="Drawn signature" style={{ height: '44px', maxWidth: '160px', objectFit: 'contain', background: '#fff', padding: '4px', border: '1px solid #e2e8f0', borderRadius: '4px' }} />
+                <div style={{ marginTop: '16px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <img src={drawnSignature} alt="Current signature" style={{ height: '46px', maxWidth: '160px', objectFit: 'contain', background: '#fff', padding: '4px', border: '1px solid #e2e8f0', borderRadius: '4px' }} />
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: '12px', color: '#15803d' }}>Session signature ready</div>
+                    <div style={{ fontWeight: 700, fontSize: '12px', color: '#15803d' }}>✅ Signature ready</div>
                     <div style={{ fontSize: '11px', color: '#64748b' }}>Will appear in the downloaded PDF</div>
-                    <button type="button" onClick={() => setDrawnSignature(null)} style={{ marginTop: '4px', background: 'none', border: 'none', color: '#dc2626', fontSize: '11px', cursor: 'pointer', padding: 0, fontWeight: 600 }}>Remove</button>
+                    <button type="button" onClick={() => setDrawnSignature(null)}
+                      style={{ marginTop: '4px', background: 'none', border: 'none', color: '#dc2626', fontSize: '11px', cursor: 'pointer', padding: 0, fontWeight: 600 }}>Remove</button>
                   </div>
                 </div>
               )}
             </div>
           )}
         </div>
+
+        {/* Footer actions */}
         <div style={{ borderTop: '1px solid #e2e8f0', background: '#fff', padding: '12px 20px', display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <button type="button" onClick={onClose} style={{ padding: '9px 20px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff', fontSize: '13px', color: '#64748b', cursor: 'pointer', fontWeight: 600 }}>Close</button>
+            <button type="button" onClick={onClose}
+              style={{ padding: '9px 20px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff', fontSize: '13px', color: '#64748b', cursor: 'pointer', fontWeight: 600 }}>
+              Close
+            </button>
             {isHod && (
               <>
-                <button type="button" onClick={() => setActiveTab('edit')} style={{ padding: '9px 18px', border: '1px solid #bfdbfe', borderRadius: '8px', background: '#eff6ff', fontSize: '13px', color: '#1e40af', cursor: 'pointer', fontWeight: 600 }}>
-                  Edit Content
+                <button type="button" onClick={() => setActiveTab('edit')}
+                  style={{ padding: '9px 18px', border: '1px solid #bfdbfe', borderRadius: '8px', background: '#eff6ff', fontSize: '13px', color: '#1e40af', cursor: 'pointer', fontWeight: 600 }}>
+                  ✏️ Edit Content
                 </button>
-                <button type="button" onClick={() => setActiveTab('sign')} style={{ padding: '9px 18px', border: '1px solid #bbf7d0', borderRadius: '8px', background: '#f0fdf4', fontSize: '13px', color: '#166534', cursor: 'pointer', fontWeight: 600 }}>
-                  {drawnSignature ? 'Update Signature' : 'Draw Signature'}
+                <button type="button" onClick={() => setActiveTab('sign')}
+                  style={{ padding: '9px 18px', border: '1px solid #bbf7d0', borderRadius: '8px', background: '#f0fdf4', fontSize: '13px', color: '#166534', cursor: 'pointer', fontWeight: 600 }}>
+                  {drawnSignature ? '✍️ Update Signature' : '✍️ Add Signature'}
                 </button>
               </>
             )}
           </div>
           <button type="button" onClick={handleDownload} disabled={downloading}
-            style={{ padding: '10px 24px', border: 'none', borderRadius: '8px', background: downloading ? '#94a3b8' : 'linear-gradient(135deg, #1a365d, #2a4d8f)', color: '#fff', fontSize: '13px', fontWeight: 800, cursor: downloading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'opacity 0.2s' }}>
-            {downloading ? 'Generating PDF...' : <><Icon name="download" size={16} /> Download PDF</>}
+            style={{ padding: '10px 26px', border: 'none', borderRadius: '8px', background: downloading ? '#94a3b8' : 'linear-gradient(135deg,#1a365d,#2a4d8f)', color: '#fff', fontSize: '13px', fontWeight: 800, cursor: downloading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'opacity 0.2s' }}>
+            {downloading ? '⏳ Generating PDF...' : <><Icon name="download" size={16} /> Download PDF</>}
           </button>
         </div>
       </div>

@@ -264,8 +264,8 @@ const App = () => {
       <main className="app-main" id="main-content">
         {view === 'dashboard' && <Dashboard user={user} records={records} total={pagination.total} loading={recordsLoading} error={recordsError} navigate={navigate} reload={() => loadRecords({ page: 1 })} />}
         {view === 'submit' && <SubmitActivity key={editingActivity?.act_id || 'new-activity'} user={user} catalog={catalog} initialActivity={editingActivity} onSubmit={saveActivity} onCancel={() => navigate(editingActivity ? 'records' : 'dashboard')} submitting={submitting} />}
-        {view === 'records' && <Records user={user} records={records} loading={recordsLoading} error={recordsError} pagination={pagination} catalog={catalog} onReload={loadRecords} onEdit={editRecord} onDelete={deleteRecord} onReview={reviewRecord} navigate={navigate} />}
-        {view === 'reports' && <Reports user={user} catalog={catalog} records={records} total={pagination.total} onDownload={downloadReport} />}
+        {view === 'records' && <Records user={user} records={records} loading={recordsLoading} error={recordsError} pagination={pagination} catalog={catalog} onReload={loadRecords} onEdit={editRecord} onDelete={deleteRecord} onReview={reviewRecord} navigate={navigate} showNotification={showNotification} />}
+        {view === 'reports' && <Reports user={user} catalog={catalog} records={records} total={pagination.total} onDownload={downloadReport} showNotification={showNotification} />}
         {view === 'profile' && <Profile user={user} onChangePassword={changePassword} onSignOut={logout} />}
       </main>
       <footer className="app-footer"><span>© 2026 Walchand College of Engineering, Sangli</span><span>WCE Prof-Insights · Faculty Activity & Evidence Portal</span></footer>
