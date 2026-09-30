@@ -16,11 +16,11 @@ const publicUser = (user) => ({
 })
 
 router.post('/login', async (req, res) => {
-  const email = String(req.body.email || '').trim().toLowerCase()
+  const email = String(req.body.email || req.body.username || '').trim().toLowerCase()
   const password = String(req.body.password || '')
 
   if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required.' })
+    return res.status(400).json({ error: 'Username and password are required.' })
   }
   if (!JWT_SECRET) {
     return res.status(503).json({ error: 'Authentication is not configured on the server.' })
@@ -31,7 +31,7 @@ router.post('/login', async (req, res) => {
     const user = result.rows[0]
 
     if (!user || !user.is_active || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ error: 'The email or password is incorrect.' })
+      return res.status(401).json({ error: 'The username or password is incorrect.' })
     }
 
     const token = jwt.sign(
@@ -57,7 +57,7 @@ router.post('/signup', isLoggedIn, isAdmin, async (req, res) => {
   const name = String(req.body.name || '').trim()
   const department = String(req.body.department || '').trim()
   const designation = String(req.body.designation || 'Faculty').trim()
-  const role = ['Faculty', 'HOD', 'Admin'].includes(req.body.role) ? req.body.role : 'Faculty'
+  const role = ['Faculty', 'HOD', 'Admin', 'Club'].includes(req.body.role) ? req.body.role : 'Faculty'
 
   if (!email || !name || !department || password.length < 8) {
     return res.status(400).json({ error: 'Name, department, email and a password of at least 8 characters are required.' })

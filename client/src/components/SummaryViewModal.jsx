@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Icon from './Icon';
+import api, { downloadResponse } from '../api';
 import { formatBytes, humanize } from '../utils';
 
 const formatDateDMY = (dateStr) => {
@@ -10,7 +11,20 @@ const formatDateDMY = (dateStr) => {
 };
 
 const SummaryViewModal = ({ activity, onClose, onDownload, downloading }) => {
+  const [apprDownloading, setApprDownloading] = useState(false);
   if (!activity) return null;
+
+  const downloadAppreciation = async () => {
+    setApprDownloading(true);
+    try {
+      const response = await api.get(`/activity/${activity.act_id}/appreciation-letter`, { responseType: 'blob' });
+      downloadResponse(response, `appreciation-letter-${activity.act_id}.pdf`);
+    } catch {
+      alert('Appreciation letter is available for approved activities.');
+    } finally {
+      setApprDownloading(false);
+    }
+  };
 
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   const attachments = activity.attachments || [];
@@ -253,6 +267,19 @@ const SummaryViewModal = ({ activity, onClose, onDownload, downloading }) => {
           <button className="btn btn-secondary btn-sm" type="button" onClick={onClose}>
             Close
           </button>
+          {activity.workflow_status === 'Approved' && (
+            <button
+              className="btn btn-secondary btn-sm"
+              type="button"
+              style={{ background: '#fef3c7', borderColor: '#fde68a', color: '#92400e', fontWeight: 650 }}
+              disabled={apprDownloading}
+              onClick={downloadAppreciation}
+              title="Download official Appreciation Letter with HOD approval and digital signature"
+            >
+              {apprDownloading ? <span className="button-spinner" /> : <Icon name="award" size={14} />}
+              {apprDownloading ? 'Generating…' : 'Appreciation Letter (PDF)'}
+            </button>
+          )}
           {onDownload && (
             <button className="btn btn-primary btn-sm" type="button" disabled={downloading} onClick={onDownload}>
               {downloading ? <span className="button-spinner" /> : <Icon name="download" size={14} />}

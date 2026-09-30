@@ -5,7 +5,8 @@ const {
   buildReportMetadata,
   generateCsv,
   generatePdf,
-  generateDocx
+  generateDocx,
+  generateActivitySpecificPdf
 } = require('../services/reportService')
 
 router.use(isLoggedIn)
@@ -25,8 +26,16 @@ router.get('/activity-register', async (req, res) => {
     const result = await listActivities(req.user, req.query, { reports: true, unpaged: true })
     const records = [...result.items].reverse()
     const metadata = buildReportMetadata(req.user, req.query, records)
-    const period = safeFilenamePart(req.query.academicYear || `${req.query.from || 'all'}-${req.query.to || 'years'}`)
-    const filename = `faculty-activity-report-${period}.${format}`
+    const period = safeFilenamePart(
+      req.query.periodLabel ||
+      req.query.academicYear ||
+      (req.query.academicYears ? `combined-${req.query.academicYears.split(',').length}-years` : `${req.query.from || 'all'}-${req.query.to || 'years'}`)
+    )
+    const isActivitySpecific = Boolean(req.query.type) || req.query.reportFormat === 'activity-specific'
+    const typeName = req.query.type || 'faculty-activity'
+    const filename = isActivitySpecific && format === 'pdf'
+      ? `wce-${safeFilenamePart(typeName)}-report-${period}.pdf`
+      : `faculty-activity-report-${period}.${format}`
 
     let body
     let contentType
@@ -36,6 +45,9 @@ router.get('/activity-register', async (req, res) => {
     } else if (format === 'docx') {
       body = await generateDocx(records, metadata)
       contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    } else if (isActivitySpecific) {
+      body = await generateActivitySpecificPdf(records, metadata, req.query.type || 'Faculty Activity')
+      contentType = 'application/pdf'
     } else {
       body = await generatePdf(records, metadata)
       contentType = 'application/pdf'

@@ -113,6 +113,15 @@ const Records = ({
     downloadResponse(response, attachment.fileName);
   };
 
+  const downloadAppreciationLetter = async (record) => {
+    try {
+      const response = await api.get(`/activity/${record.act_id}/appreciation-letter`, { responseType: 'blob' });
+      downloadResponse(response, `appreciation-letter-${record.act_id}.pdf`);
+    } catch {
+      alert('Appreciation letter is available for approved activities.');
+    }
+  };
+
   const viewAttachment = async (record, attachment) => {
     const response = await api.get(`/activity/${record.act_id}/attachments/${attachment.id}?disposition=inline`, { responseType: 'blob' });
     const url = URL.createObjectURL(response.data);
@@ -235,6 +244,9 @@ const Records = ({
                           <div className="row-actions">
                             <button className="icon-button" type="button" onClick={() => openRecord(record)} aria-label={`View ${record.title}`} title="View details"><Icon name="eye" size={18} /></button>
                             <button className="icon-button" type="button" onClick={() => openDetailedReport(record)} aria-label="Official Detailed Report" title="View &amp; Download Detailed Event Report"><Icon name="reports" size={18} /></button>
+                            {(record.workflow_status === 'Approved' || isReviewer) && (
+                              <button className="icon-button" type="button" onClick={() => downloadAppreciationLetter(record)} aria-label="Appreciation Letter" title="Download Appreciation Letter (PDF)" style={{ color: '#b7791f' }}><Icon name="award" size={18} /></button>
+                            )}
                             {isOwner && editableStatuses.has(record.workflow_status) && <button className="icon-button" type="button" onClick={() => onEdit(record)} aria-label={`Edit ${record.title}`} title="Edit"><Icon name="edit" size={18} /></button>}
                             {isOwner && editableStatuses.has(record.workflow_status) && <button className="icon-button danger" type="button" onClick={() => requestDelete(record)} aria-label={`Remove ${record.title}`} title="Remove"><Icon name="trash" size={18} /></button>}
                           </div>
@@ -265,6 +277,11 @@ const Records = ({
           footer={
             <>
               <button className="btn btn-secondary" type="button" onClick={closeRecord}>Close</button>
+              {(viewedRecord.workflow_status === 'Approved' || isReviewer) && (
+                <button className="btn btn-secondary" type="button" style={{ background: '#fef3c7', borderColor: '#fde68a', color: '#92400e', fontWeight: 650 }} onClick={() => downloadAppreciationLetter(viewedRecord)} title="Download official Appreciation Letter with HOD approval and digital signature">
+                  <Icon name="award" size={16} /> Appreciation Letter
+                </button>
+              )}
               <button className="btn btn-secondary" type="button" disabled={summaryDownloading} onClick={() => downloadActivitySummary(viewedRecord)}>
                 {summaryDownloading ? <span className="button-spinner dark" /> : <Icon name="download" size={16} />} {summaryDownloading ? 'Preparing…' : 'Download Summary'}
               </button>

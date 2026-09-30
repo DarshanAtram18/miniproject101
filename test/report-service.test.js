@@ -6,7 +6,9 @@ const {
   generateCsv,
   generatePdf,
   generateDocx,
-  generateActivitySummaryPdf
+  generateActivitySummaryPdf,
+  generateAppreciationLetterPdf,
+  generateActivitySpecificPdf
 } = require('../src/services/reportService')
 
 const faculty = {
@@ -185,3 +187,46 @@ test('individual activity summary returns a complete PDF for faculty and HOD dow
   assert.match(buffer.subarray(-32).toString('ascii'), /%%EOF/)
   assert.ok(buffer.length > 2000)
 })
+
+test('appreciation letter returns an official PDF with HOD digital approval and seal', async () => {
+  const activity = {
+    ...approvedRecord,
+    staff_designation: 'Assistant Professor',
+    reviewer_name: 'Dr. A. R. Surve',
+    reviewed_at: '2026-08-20T06:00:00.000Z',
+    participant_count: 120
+  }
+  const buffer = await generateAppreciationLetterPdf(activity, { name: 'Dr. A. R. Surve', role: 'HOD' })
+
+  assert.ok(Buffer.isBuffer(buffer))
+  assert.equal(buffer.subarray(0, 5).toString('ascii'), '%PDF-')
+  assert.match(buffer.subarray(-32).toString('ascii'), /%%EOF/)
+  assert.ok(buffer.length > 2000)
+})
+
+test('specialized activity-specific PDF returns a complete landscape matrix report for populated and empty sets', async () => {
+  const metadata = buildReportMetadata(faculty, { academicYear: '2025-26', type: 'Faculty Development Programme (FDP)' }, [approvedRecord, submittedRecord])
+  const populated = await generateActivitySpecificPdf([approvedRecord, submittedRecord], metadata, 'Faculty Development Programme (FDP)')
+  const empty = await generateActivitySpecificPdf([], metadata, 'Faculty Development Programme (FDP)')
+
+  for (const buffer of [populated, empty]) {
+    assert.ok(Buffer.isBuffer(buffer))
+    assert.equal(buffer.subarray(0, 5).toString('ascii'), '%PDF-')
+    assert.match(buffer.subarray(-32).toString('ascii'), /%%EOF/)
+    assert.ok(buffer.length > 1500)
+  }
+  assert.ok(populated.length > empty.length)
+})
+
+test('metadata correctly formats Club role coverage label and value', () => {
+  const clubUser = {
+    id: 99,
+    name: 'ACM Student Chapter',
+    department: 'Computer Science and Engineering',
+    role: 'Club'
+  }
+  const clubMetadata = buildReportMetadata(clubUser, { academicYear: '2025-26' }, [approvedRecord])
+  assert.equal(clubMetadata.coverageLabel, 'Club / Chapter')
+  assert.equal(clubMetadata.coverageValue, 'ACM Student Chapter')
+})
+

@@ -34,9 +34,9 @@ const Login = ({ onLogin, loading, error }) => {
       <section className="login-form-panel">
         <form className="login-card" onSubmit={submit} autoComplete="off" noValidate>
           <div className="login-card-heading">
-            <span className="eyebrow">Secure faculty access</span>
+            <span className="eyebrow">Secure portal access</span>
             <h2>Sign in to Prof-Insights</h2>
-            <p>Use the email and password issued for your faculty account.</p>
+            <p>Use the username or email and password issued for your account.</p>
           </div>
 
           {error && (
@@ -47,15 +47,15 @@ const Login = ({ onLogin, loading, error }) => {
           )}
 
           <div className="form-group">
-            <label htmlFor="login-email">Faculty email <span className="required-mark">*</span></label>
+            <label htmlFor="login-email">Username <span className="required-mark">*</span></label>
             <input
               id="login-email"
               name="email"
               className="form-control"
-              type="email"
+              type="text"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="faculty@walchandsangli.ac.in"
+              placeholder="Enter username (e.g. acm@wce, darshan@gmail.com)"
               autoComplete="username"
               required
             />

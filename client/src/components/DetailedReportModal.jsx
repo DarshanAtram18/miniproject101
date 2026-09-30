@@ -15,10 +15,45 @@ const formatDateDMY = (dateStr) => {
 
 const DetailedReportModal = ({ activity, user, onClose }) => {
   const [downloading, setDownloading] = useState(false);
+  const [appreciationDownloading, setAppreciationDownloading] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const [loadedBlobs, setLoadedBlobs] = useState({});
   const touchStartX = useRef(null);
+
+  const handleDownloadAppreciation = async () => {
+    setAppreciationDownloading(true);
+    try {
+      const response = await api.get(`/activity/${activity.act_id}/appreciation-letter`, { responseType: 'blob' });
+      downloadResponse(response, `appreciation-letter-${activity.act_id}.pdf`);
+    } catch {
+      alert('Unable to download appreciation letter. It is issued for approved activities.');
+    } finally {
+      setAppreciationDownloading(false);
+    }
+  };
+
+  const photoIds = (activity?.attachments || [])
+    .filter(a => a.kind === 'image' || a.mimeType?.startsWith('image/'))
+    .map(p => p.id)
+    .filter(Boolean)
+    .join(',');
+
+  useEffect(() => {
+    if (!activity) return;
+    let mounted = true;
+    const photos = (activity.attachments || []).filter(a => a.kind === 'image' || a.mimeType?.startsWith('image/'));
+    photos.forEach(async (photo) => {
+      if (!photo.id) return;
+      try {
+        const resp = await api.get(`/activity/${activity.act_id}/attachments/${photo.id}`, { responseType: 'blob' });
+        if (mounted) setLoadedBlobs(p => ({ ...p, [photo.id]: URL.createObjectURL(resp.data) }));
+      } catch {
+        // Thumbnail load failure is handled gracefully by fallback
+      }
+    });
+    return () => { mounted = false; };
+  }, [activity, photoIds]);
 
   if (!activity) return null;
 
@@ -30,18 +65,6 @@ const DetailedReportModal = ({ activity, user, onClose }) => {
   const attendFile   = attachments.find(a => a.kind === 'attendance' || a.fileName?.toLowerCase().includes('attend'));
   const proofFile    = attachments.find(a => a.kind === 'evidence' || a.kind === 'report' || a.fileName?.toLowerCase().includes('cert') || a.fileName?.toLowerCase().includes('proof'));
   const photoFiles   = attachments.filter(a => a.kind === 'image' || a.mimeType?.startsWith('image/'));
-
-  useEffect(() => {
-    let mounted = true;
-    photoFiles.forEach(async (photo) => {
-      if (!photo.id || loadedBlobs[photo.id]) return;
-      try {
-        const resp = await api.get(`/activity/${activity.act_id}/attachments/${photo.id}`, { responseType: 'blob' });
-        if (mounted) setLoadedBlobs(p => ({ ...p, [photo.id]: URL.createObjectURL(resp.data) }));
-      } catch {}
-    });
-    return () => { mounted = false; };
-  }, [activity.act_id, photoFiles.map(p => p.id).join(',')]);
 
   const token = getActiveToken();
 
@@ -396,8 +419,21 @@ const DetailedReportModal = ({ activity, user, onClose }) => {
           <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
             {attachments.length} file(s) · Status: <strong>{activity.workflow_status || 'Submitted'}</strong>
           </span>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button className="btn btn-secondary" type="button" onClick={onClose}>Close</button>
+            {(activity.workflow_status === 'Approved' || ['HOD', 'Admin'].includes(user?.role)) && (
+              <button
+                className="btn btn-secondary"
+                type="button"
+                style={{ background: '#fef3c7', borderColor: '#fde68a', color: '#92400e', fontWeight: 650 }}
+                disabled={appreciationDownloading}
+                onClick={handleDownloadAppreciation}
+                title="Download official Appreciation Letter with HOD approval and digital signature"
+              >
+                {appreciationDownloading ? <span className="button-spinner" /> : <Icon name="award" size={16} />}
+                {appreciationDownloading ? 'Generating…' : 'Appreciation Letter (PDF)'}
+              </button>
+            )}
             <button className="btn btn-primary" type="button" disabled={downloading} onClick={handleDownloadPDF}>
               {downloading ? <span className="button-spinner" /> : <Icon name="download" size={16} />}
               {downloading ? 'Generating…' : 'Download PDF'}

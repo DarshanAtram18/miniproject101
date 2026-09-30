@@ -305,3 +305,11 @@ test('workflow helpers encode reviewer access, editability, and legal transition
   assert.ok(isOrganizerRole('Convenor'))
   assert.ok(!isOrganizerRole('Participant / Attendee'))
 })
+
+test('scope "Other" is recognized by catalog and accepted during validation', () => {
+  const webinarWithOther = normalizeWebinar({ scope: 'Other' })
+  const errors = validateActivity(webinarWithOther)
+  assert.equal(errors.length, 0)
+  assert.equal(webinarWithOther.scope, 'Other')
+})
+

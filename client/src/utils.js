@@ -41,7 +41,7 @@ export const initials = (name = '') => {
   return (parts.length ? `${parts[0][0] || ''}${parts.at(-1)?.[0] || ''}` : 'FP').toUpperCase();
 };
 
-export const currentAcademicYears = (count = 8) => {
+export const currentAcademicYears = (count = 10) => {
   const now = new Date();
   const start = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
   return Array.from({ length: count }, (_, index) => {

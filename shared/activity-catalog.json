@@ -1,7 +1,7 @@
 {
   "version": 2,
   "modes": ["Offline", "Online", "Hybrid"],
-  "scopes": ["Institute / Local", "State", "National", "International"],
+  "scopes": ["Institute / Local", "State", "National", "International", "Other"],
   "activityStatuses": ["Completed", "Ongoing", "Planned", "Cancelled"],
   "workflowStatuses": ["Draft", "Submitted", "Changes Requested", "Approved", "Archived"],
   "evidenceAvailability": ["Available now", "Not issued", "Will upload later"],

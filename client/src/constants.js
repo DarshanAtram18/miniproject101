@@ -64,8 +64,20 @@ export const eventModes = ["Online","Offline","Hybrid"];
 export const durationOptions = ["1 Day","2–3 Days","1 Week","2 Weeks","1 Month","More than 1 Month","Other"];
 export const yesNo = ["Yes","No"];
 export const fdpTypes = ["Organizer","Participant","Resource Person"];
-export const semTypes = ["National","International","State Level","Institute Level"];
+export const semTypes = ["National", "International", "State Level", "Institute Level", "Other"];
 export const fundAgencies = ["AICTE","UGC","DST","ISTE","Industry Sponsored","Self-Funded","Other"];
-export const acYears = ["2025-26","2024-25","2023-24","2022-23","2021-22"];
+export const acYears = [
+  "2026-27",
+  "2025-26",
+  "2024-25",
+  "2023-24",
+  "2022-23",
+  "2021-22",
+  "2020-21",
+  "2019-20",
+  "2018-19",
+  "2017-18",
+  "2016-17"
+];
 export const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 export const publishers = ["Springer","Elsevier","Wiley","Pearson","McGraw-Hill","Oxford","Cambridge","Taylor & Francis","Other"];

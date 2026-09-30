@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import Icon from './Icon';
-import { currentAcademicYears, formatBytes, formatDateRange, hasValue, humanize } from '../utils';
+import { currentAcademicYears, hasValue, humanize } from '../utils';
 
 const legacyTypeAliases = {
   'Value Added Course': 'Value-Added Course',
@@ -475,7 +475,6 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
   const proofUrl = liveProof?.previewUrl || (liveProof?.id && `/api/activity/${initialActivity?.act_id}/attachments/${liveProof.id}?disposition=inline${tokenParam}`) || '#';
 
   const zoomScale = zoomLevel === 'Fit' ? 0.75 : Number(zoomLevel) / 100;
-  const isExistingOrSubmitted = Boolean(initialActivity?.act_id);
 
   // Filtered detail entries for specific contribution data table
   const detailEntries = Object.entries(form.details || {}).filter(([, val]) => hasValue(val));
@@ -577,7 +576,7 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
                       value={form.academicYear}
                       onChange={(e) => setValue('academicYear', e.target.value)}
                     >
-                      {currentAcademicYears(8).map((year) => (
+                      {currentAcademicYears(10).map((year) => (
                         <option key={year} value={year}>{year}</option>
                       ))}
                     </select>

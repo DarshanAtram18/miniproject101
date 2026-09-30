@@ -11,7 +11,7 @@ const Header = ({ activeNav, navigate, logout, user }) => {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
     { id: 'submit', label: 'New Activity', icon: 'plus' },
-    { id: 'records', label: isReviewer ? 'Department Records' : 'My Records', icon: 'records' },
+    { id: 'records', label: isReviewer ? 'Department Records' : user?.role === 'Club' ? 'Club Records' : 'My Records', icon: 'records' },
     { id: 'reports', label: 'Reports', icon: 'reports' },
     { id: 'profile', label: 'My Profile', icon: 'user' }
   ];

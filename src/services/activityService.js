@@ -101,7 +101,21 @@ function buildFilters(user, query = {}, { reports = false } = {}) {
 
   if (query.facultyId && isReviewer) add('a.staff_id = ?', Number(query.facultyId))
   if (query.department && user.role === 'Admin') add('a.department = ?', safeText(query.department, 255))
-  if (query.academicYear) add('a.acad_year = ?', safeText(query.academicYear, 9))
+  if (query.academicYears) {
+    const yearList = String(query.academicYears)
+      .split(',')
+      .map((y) => safeText(y.trim(), 9))
+      .filter(Boolean)
+    if (yearList.length > 0) {
+      const placeholders = yearList.map((y) => {
+        values.push(y)
+        return `$${values.length}`
+      })
+      clauses.push(`a.acad_year IN (${placeholders.join(', ')})`)
+    }
+  } else if (query.academicYear) {
+    add('a.acad_year = ?', safeText(query.academicYear, 9))
+  }
   if (query.type) add('t.name = ?', safeText(query.type, 100))
   if (query.role) add('a.role = ?', safeText(query.role, 255))
   if (query.scope) add('a.scope = ?', safeText(query.scope, 50))

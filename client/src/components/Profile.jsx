@@ -42,11 +42,11 @@ const Profile = ({ user, onChangePassword, onSignOut }) => {
             <span className="profile-large-avatar">{initials(user.name)}</span>
             <h2>{user.name}</h2>
             <p>{user.designation || 'Faculty'} · {user.department}</p>
-            <span className="role-badge">{user.role}</span>
+            <span className={`role-badge role-${(user.role || '').toLowerCase()}`}>{user.role}</span>
             <dl>
-              <div><dt>Faculty email</dt><dd>{user.email}</dd></div>
+              <div><dt>{user.role === 'Club' ? 'Account email' : 'Faculty email'}</dt><dd>{user.email}</dd></div>
               <div><dt>Primary department</dt><dd>{user.department}</dd></div>
-              <div><dt>Designation</dt><dd>{user.designation || 'Faculty'}</dd></div>
+              <div><dt>Designation</dt><dd>{user.designation || (user.role === 'Club' ? 'Club Coordinator' : 'Faculty')}</dd></div>
               <div><dt>Portal role</dt><dd>{user.role}</dd></div>
             </dl>
             <div className="inline-alert info"><Icon name="lock" size={18} /><p>Identity and department fields are centrally managed to prevent spelling variations in institutional reports.</p></div>

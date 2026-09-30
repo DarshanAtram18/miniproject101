@@ -12,7 +12,7 @@ const {
   getActivityById,
   canAccessActivity
 } = require('../services/activityService')
-const { generateActivitySummaryPdf } = require('../services/reportService')
+const { generateActivitySummaryPdf, generateAppreciationLetterPdf } = require('../services/reportService')
 
 router.use(isLoggedIn)
 
@@ -608,28 +608,29 @@ router.get('/:activityId/attachments/:attachmentId', async (req, res) => {
   }
 })
 
-router.get('/:activityId/summary-report', async (req, res) => {
+router.get('/:activityId/appreciation-letter', async (req, res) => {
   try {
     const activity = await getActivityById(req.params.activityId)
     if (!activity) return res.status(404).json({ error: 'Activity not found.' })
     if (!canAccessActivity(req.user, activity)) {
-      return res.status(403).json({ error: 'You do not have permission to download this report.' })
+      return res.status(403).json({ error: 'You do not have permission to download this appreciation letter.' })
     }
-    const pdfBuffer = await generateActivitySummaryPdf(activity, req.user)
+    const pdfBuffer = await generateAppreciationLetterPdf(activity, req.user)
     const safeName = String(activity.title || 'activity')
       .replace(/[^a-zA-Z0-9 -]/g, '')
       .trim()
       .replace(/\s+/g, '-')
       .toLowerCase()
       .slice(0, 60)
-    const filename = `activity-${req.params.activityId}-${safeName}-summary.pdf`
+    const filename = `appreciation-letter-${req.params.activityId}-${safeName}.pdf`
     res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Length', pdfBuffer.length)
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
     res.setHeader('Cache-Control', 'no-store')
     return res.send(pdfBuffer)
   } catch (error) {
-    console.error('Summary report error:', error)
-    return res.status(500).json({ error: 'Unable to generate the activity summary report.' })
+    console.error('Appreciation letter error:', error)
+    return res.status(500).json({ error: 'Unable to generate the appreciation letter.' })
   }
 })
 

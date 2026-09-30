@@ -28,7 +28,8 @@ const paths = {
   users: <><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2.5" /><path d="M3 20a6 6 0 0 1 12 0M14 15a5 5 0 0 1 7 4.5" /></>,
   lock: <><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>,
   info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7h.01" /></>,
-  filter: <path d="M4 5h16l-6 7v6l-4 2v-8Z" />
+  filter: <path d="M4 5h16l-6 7v6l-4 2v-8Z" />,
+  award: <><circle cx="12" cy="8" r="6" /><path d="m15.4 12.8 2.6 7.2-6-3.5-6 3.5 2.6-7.2" /></>
 };
 
 const Icon = ({ name, size = 20, strokeWidth = 1.8, className = '', title }) => (

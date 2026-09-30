@@ -23,6 +23,7 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
     includePending: false
   });
   const [downloading, setDownloading] = useState('');
+  const [appreciationDownloading, setAppreciationDownloading] = useState(false);
 
   const activityTypes = catalog.typeGroups.flatMap((group) => group.types.map((type) => type.name));
   const roles = useMemo(() => [...new Set(catalog.typeGroups.flatMap((group) => group.types.flatMap((type) => type.roles)))].sort(), [catalog]);
@@ -31,6 +32,9 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
   const update = (name, value) => setFilters((previous) => ({ ...previous, [name]: value }));
 
   const download = async (format) => {
+    const fiveYears = currentAcademicYears(5);
+    const tenYears = currentAcademicYears(10);
+
     const reportFilters = {
       type: filters.type,
       role: filters.role,
@@ -38,7 +42,16 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
       mine: filters.mine,
       includePending: filters.includePending ? 'true' : 'false',
       ...(periodMode === 'academicYear' ? { academicYear: filters.academicYear } : {}),
-      ...(periodMode === 'dateRange' ? { from: filters.from, to: filters.to } : {})
+      ...(periodMode === 'last5Years' ? {
+        academicYears: fiveYears.join(','),
+        periodLabel: `Last 5 Years (${fiveYears[4]} to ${fiveYears[0]})`
+      } : {}),
+      ...(periodMode === 'last10Years' ? {
+        academicYears: tenYears.join(','),
+        periodLabel: `Last 10 Years (${tenYears[9]} to ${tenYears[0]})`
+      } : {}),
+      ...(periodMode === 'dateRange' ? { from: filters.from, to: filters.to } : {}),
+      ...(periodMode === 'combined' ? { periodLabel: 'All Combined Years' } : {})
     };
     setDownloading(format);
     try {
@@ -48,14 +61,38 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
     }
   };
 
+  const downloadSingleAppreciation = async (recordId) => {
+    const found = records.find((r) => String(r.act_id) === String(recordId));
+    if (!found) return;
+    setAppreciationDownloading(true);
+    try {
+      const response = await api.get(`/activity/${found.act_id}/appreciation-letter`, { responseType: 'blob' });
+      downloadResponse(response, `appreciation-letter-${found.act_id}.pdf`);
+      showNotification?.('Appreciation letter downloaded successfully.');
+    } catch {
+      if (showNotification) {
+        showNotification('Appreciation letter is available for approved activities.', 'error');
+      } else {
+        alert('Appreciation letter is available for approved activities.');
+      }
+    } finally {
+      setAppreciationDownloading(false);
+    }
+  };
+
   const downloadSingleSummary = async (record) => {
     setSummaryDownloading(true);
     try {
       const response = await api.get(`/activity/${record.act_id}/summary-report`, { responseType: 'blob' });
       downloadResponse(response, `activity-${record.act_id}-event-summary.pdf`);
+      showNotification?.('Activity summary PDF downloaded successfully.');
     } catch (error) {
       const message = await getBlobErrorMessage(error, 'Unable to download the summary PDF.');
-      alert(message);
+      if (showNotification) {
+        showNotification(message, 'error');
+      } else {
+        alert(message);
+      }
     } finally {
       setSummaryDownloading(false);
     }
@@ -108,17 +145,83 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
             )}
 
             <div className="form-group">
-              <label>Reporting period</label>
-              <div className="segmented-control three-options">
-                <button type="button" className={periodMode === 'academicYear' ? 'active' : ''} onClick={() => setPeriodMode('academicYear')}>Academic year</button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <label style={{ margin: 0 }}>Reporting period</label>
+                <div className="period-preset-chips" style={{ margin: 0 }}>
+                  <button
+                    type="button"
+                    className={`preset-chip-btn ${periodMode === 'last5Years' ? 'active' : ''}`}
+                    onClick={() => setPeriodMode('last5Years')}
+                    title="Quick preset for 5-Year NBA SAR Criteria 5 Report"
+                  >
+                    ⚡ Last 5 Years (NBA)
+                  </button>
+                  <button
+                    type="button"
+                    className={`preset-chip-btn ${periodMode === 'last10Years' ? 'active' : ''}`}
+                    onClick={() => setPeriodMode('last10Years')}
+                    title="Quick preset for 10-Year NAAC SSR Assessment Report"
+                  >
+                    ⚡ Last 10 Years (NAAC)
+                  </button>
+                </div>
+              </div>
+
+              <div className="segmented-control five-options">
+                <button type="button" className={periodMode === 'academicYear' ? 'active' : ''} onClick={() => setPeriodMode('academicYear')}>Single year</button>
+                <button type="button" className={periodMode === 'last5Years' ? 'active' : ''} onClick={() => setPeriodMode('last5Years')}>Last 5 years</button>
+                <button type="button" className={periodMode === 'last10Years' ? 'active' : ''} onClick={() => setPeriodMode('last10Years')}>Last 10 years</button>
                 <button type="button" className={periodMode === 'dateRange' ? 'active' : ''} onClick={() => setPeriodMode('dateRange')}>Custom dates</button>
-                <button type="button" className={periodMode === 'combined' ? 'active' : ''} onClick={() => setPeriodMode('combined')}>Combined years</button>
+                <button type="button" className={periodMode === 'combined' ? 'active' : ''} onClick={() => setPeriodMode('combined')}>All records</button>
               </div>
             </div>
 
-            {periodMode === 'academicYear' && <div className="form-group"><label htmlFor="report-year">Academic year</label><select id="report-year" className="form-control" value={filters.academicYear} onChange={(event) => update('academicYear', event.target.value)}>{currentAcademicYears(10).map((year) => <option key={year}>{year}</option>)}</select></div>}
-            {periodMode === 'dateRange' && <div className="form-grid two-columns"><div className="form-group"><label htmlFor="report-from">From</label><input id="report-from" className="form-control" type="date" value={filters.from} onChange={(event) => update('from', event.target.value)} /></div><div className="form-group"><label htmlFor="report-to">To</label><input id="report-to" className="form-control" type="date" min={filters.from || undefined} value={filters.to} onChange={(event) => update('to', event.target.value)} /></div></div>}
-            {periodMode === 'combined' && <div className="inline-alert info"><Icon name="info" size={19} /><span>The report will include every matching year and order activities chronologically by date.</span></div>}
+            {periodMode === 'academicYear' && (
+              <div className="form-group">
+                <label htmlFor="report-year">Academic year</label>
+                <select id="report-year" className="form-control" value={filters.academicYear} onChange={(event) => update('academicYear', event.target.value)}>
+                  {currentAcademicYears(10).map((year) => <option key={year}>{year}</option>)}
+                </select>
+              </div>
+            )}
+
+            {periodMode === 'last5Years' && (
+              <div className="inline-alert info">
+                <Icon name="reports" size={19} />
+                <span>
+                  <strong>Combined 5-Year Assessment Period (NBA Cycle):</strong> Generates a consolidated multi-year report covering 5 academic years: <strong>{currentAcademicYears(5)[4]} to {currentAcademicYears(5)[0]}</strong> ({currentAcademicYears(5).slice().reverse().join(', ')}).
+                </span>
+              </div>
+            )}
+
+            {periodMode === 'last10Years' && (
+              <div className="inline-alert info">
+                <Icon name="award" size={19} />
+                <span>
+                  <strong>Combined 10-Year Institutional Period (NAAC SSR):</strong> Generates a comprehensive decade report covering 10 academic years: <strong>{currentAcademicYears(10)[9]} to {currentAcademicYears(10)[0]}</strong> ({currentAcademicYears(10).slice().reverse().join(', ')}).
+                </span>
+              </div>
+            )}
+
+            {periodMode === 'dateRange' && (
+              <div className="form-grid two-columns">
+                <div className="form-group">
+                  <label htmlFor="report-from">From</label>
+                  <input id="report-from" className="form-control" type="date" value={filters.from} onChange={(event) => update('from', event.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="report-to">To</label>
+                  <input id="report-to" className="form-control" type="date" min={filters.from || undefined} value={filters.to} onChange={(event) => update('to', event.target.value)} />
+                </div>
+              </div>
+            )}
+
+            {periodMode === 'combined' && (
+              <div className="inline-alert info">
+                <Icon name="info" size={19} />
+                <span>The report will include every matching year in the repository and order activities chronologically by date.</span>
+              </div>
+            )}
 
             <div className="form-divider" />
             <h3 className="form-subheading">Optional filters</h3>
@@ -134,11 +237,51 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
             </label>
 
             <div className="report-download-section">
-              <div><h3>Download Combined / Period Reports</h3><p>All formats contain the same filters, date-wise ordering and executive summary.</p></div>
+              <div>
+                <h3>Download Combined / Period Reports</h3>
+                <p>All formats contain the same filters, date-wise ordering and executive summary.</p>
+              </div>
+              {filters.type && (
+                <div className="inline-alert info" style={{ marginBottom: '12px' }}>
+                  <Icon name="info" size={17} />
+                  <span>
+                    <strong>Specialized Activity Format Active:</strong> A dedicated consolidated PDF tailored for <strong>{filters.type}</strong> will be generated for the chosen time period.
+                  </span>
+                </div>
+              )}
               <div className="download-button-grid">
-                <button className="download-format-button pdf" type="button" onClick={() => download('pdf')} disabled={Boolean(downloading)}><span><Icon name="file" /></span><div><strong>PDF Register</strong><small>Chronological summary</small></div>{downloading === 'pdf' ? <span className="button-spinner dark" /> : <Icon name="download" size={18} />}</button>
-                <button className="download-format-button docx" type="button" onClick={() => download('docx')} disabled={Boolean(downloading)}><span><Icon name="file" /></span><div><strong>DOCX Register</strong><small>Editable Word report</small></div>{downloading === 'docx' ? <span className="button-spinner dark" /> : <Icon name="download" size={18} />}</button>
-                <button className="download-format-button csv" type="button" onClick={() => download('csv')} disabled={Boolean(downloading)}><span><Icon name="reports" /></span><div><strong>CSV Data</strong><small>Data analysis</small></div>{downloading === 'csv' ? <span className="button-spinner dark" /> : <Icon name="download" size={18} />}</button>
+                <button className="download-format-button pdf" type="button" onClick={() => download('pdf')} disabled={Boolean(downloading)}>
+                  <span><Icon name="file" /></span>
+                  <div>
+                    <strong>{filters.type ? 'Activity-Specific PDF' : 'PDF Register'}</strong>
+                    <small>
+                      {filters.type
+                        ? 'Consolidated report format'
+                        : periodMode === 'last5Years'
+                          ? 'Combined 5-year register'
+                          : periodMode === 'last10Years'
+                            ? 'Combined 10-year register'
+                            : 'Chronological summary'}
+                    </small>
+                  </div>
+                  {downloading === 'pdf' ? <span className="button-spinner dark" /> : <Icon name="download" size={18} />}
+                </button>
+                <button className="download-format-button docx" type="button" onClick={() => download('docx')} disabled={Boolean(downloading)}>
+                  <span><Icon name="file" /></span>
+                  <div>
+                    <strong>DOCX Register</strong>
+                    <small>Editable Word report</small>
+                  </div>
+                  {downloading === 'docx' ? <span className="button-spinner dark" /> : <Icon name="download" size={18} />}
+                </button>
+                <button className="download-format-button csv" type="button" onClick={() => download('csv')} disabled={Boolean(downloading)}>
+                  <span><Icon name="reports" /></span>
+                  <div>
+                    <strong>CSV Data</strong>
+                    <small>Data analysis</small>
+                  </div>
+                  {downloading === 'csv' ? <span className="button-spinner dark" /> : <Icon name="download" size={18} />}
+                </button>
               </div>
             </div>
 
@@ -148,7 +291,7 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
                 <Icon name="reports" size={18} /> Single Activity Reports &amp; Verification
               </h3>
               <p style={{ fontSize: '0.74rem', color: 'var(--muted)', marginBottom: '12px' }}>
-                View or download an official structured contribution document or event summary with photo gallery links and verified attachments.
+                View or download an official structured contribution document, event summary, or HOD approved appreciation letter.
               </p>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <select
@@ -180,6 +323,16 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
                   onClick={() => openSingleDetailed(selectedSingleActId)}
                 >
                   <Icon name="reports" size={16} /> View Official Report
+                </button>
+                <button
+                  className="btn btn-warning"
+                  type="button"
+                  disabled={!selectedSingleActId || appreciationDownloading}
+                  onClick={() => downloadSingleAppreciation(selectedSingleActId)}
+                  title="Download HOD Approved Appreciation Letter"
+                >
+                  {appreciationDownloading ? <span className="button-spinner dark" /> : <Icon name="award" size={16} />}
+                  Appreciation Letter (PDF)
                 </button>
               </div>
             </div>

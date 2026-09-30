@@ -36,6 +36,29 @@ accounts.push({
   dept: "All Departments"
 });
 
+// Add Club Accounts (Password: 123 for all clubs)
+const clubList = [
+  { name: "ACM Student Chapter", username: "acm@wce", dept: "Computer Science and Engineering" },
+  { name: "ACSES (Association of Computer Science & Engg Students)", username: "acses@wce", dept: "Computer Science and Engineering" },
+  { name: "Walchand Linux Users Group (WLUG)", username: "wlug@wce", dept: "Computer Science and Engineering" },
+  { name: "SAIT (Students Association of Information Technology)", username: "sait@wce", dept: "Information Technology" },
+  { name: "CESA (Civil Engineering Students Association)", username: "cesa@wce", dept: "Civil Engineering" },
+  { name: "ELESA (Electronics Engineering Students Association)", username: "elesa@wce", dept: "Electronics Engineering" },
+  { name: "Microsoft Learn Student Chapter (MLSC WCE)", username: "mlsc@wce", dept: "Computer Science and Engineering" },
+  { name: "Rotaract Club of WCE Sangli", username: "rotaract@wce", dept: "Institutional / Student Activities" },
+  { name: "Google Developer Groups on Campus (GDG WCE)", username: "gdg@wce", dept: "Computer Science and Engineering" }
+];
+
+clubList.forEach(c => {
+  accounts.push({
+    name: c.name,
+    username: c.username,
+    password: "123",
+    role: "Club",
+    dept: c.dept
+  });
+});
+
 export const users = accounts;
 
 export const authenticate = (inputUsername, inputPassword) => {
