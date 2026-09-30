@@ -608,6 +608,30 @@ router.get('/:activityId/attachments/:attachmentId', async (req, res) => {
   }
 })
 
+// GET: Return activity data for client-side letter preview
+router.get('/:activityId/appreciation-letter/preview', async (req, res) => {
+  try {
+    const activity = await getActivityById(req.params.activityId)
+    if (!activity) return res.status(404).json({ error: 'Activity not found.' })
+    if (!canAccessActivity(req.user, activity)) {
+      return res.status(403).json({ error: 'You do not have permission to view this appreciation letter.' })
+    }
+    // Fetch HOD signature for the department
+    const dbPool = require('../db/pool')
+    const sigResult = await dbPool.query(
+      `SELECT signature_image FROM users WHERE role = 'HOD' AND LOWER(department) = LOWER($1) AND is_active = TRUE AND signature_image IS NOT NULL ORDER BY updated_at DESC LIMIT 1`,
+      [activity.department || '']
+    ).catch(() => ({ rows: [] }))
+    const hasHodSignature = sigResult.rows.length > 0
+    const hodSignatureData = sigResult.rows[0]?.signature_image || null
+    return res.json({ activity, hasHodSignature, hodSignatureData })
+  } catch (error) {
+    console.error('Appreciation letter preview error:', error)
+    return res.status(500).json({ error: 'Unable to load appreciation letter preview.' })
+  }
+})
+
+// GET: Download PDF (standard path)
 router.get('/:activityId/appreciation-letter', async (req, res) => {
   try {
     const activity = await getActivityById(req.params.activityId)
@@ -630,6 +654,33 @@ router.get('/:activityId/appreciation-letter', async (req, res) => {
     return res.send(pdfBuffer)
   } catch (error) {
     console.error('Appreciation letter error:', error)
+    return res.status(500).json({ error: 'Unable to generate the appreciation letter.' })
+  }
+})
+
+// POST: Generate PDF with HOD-edited overrides
+router.post('/:activityId/appreciation-letter', async (req, res) => {
+  try {
+    const activity = await getActivityById(req.params.activityId)
+    if (!activity) return res.status(404).json({ error: 'Activity not found.' })
+    if (!canAccessActivity(req.user, activity)) {
+      return res.status(403).json({ error: 'You do not have permission.' })
+    }
+    // Merge overrides from HOD editor into the activity
+    const overrides = req.body.overrides || {}
+    const customSignature = req.body.customSignature || null // base64 drawn signature
+    const mergedActivity = { ...activity, ...overrides }
+    const pdfBuffer = await generateAppreciationLetterPdf(mergedActivity, req.user, customSignature)
+    const safeName = String(mergedActivity.title || 'activity')
+      .replace(/[^a-zA-Z0-9 -]/g, '').trim().replace(/\s+/g, '-').toLowerCase().slice(0, 60)
+    const filename = `appreciation-letter-${req.params.activityId}-${safeName}.pdf`
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Length', pdfBuffer.length)
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.setHeader('Cache-Control', 'no-store')
+    return res.send(pdfBuffer)
+  } catch (error) {
+    console.error('Appreciation letter (custom) error:', error)
     return res.status(500).json({ error: 'Unable to generate the appreciation letter.' })
   }
 })

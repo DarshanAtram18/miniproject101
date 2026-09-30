@@ -554,12 +554,112 @@ function generateDocx(records, metadata) {
   return Packer.toBuffer(doc)
 }
 
+// Build rich, human-written body text for the letter based on activity details
+function buildAppreciationBody(activity) {
+  const name = activity.staff_name || 'the faculty member'
+  const type = (activity.type_name || 'activity').toLowerCase()
+  const title = activity.title || 'the activity'
+  const role = String(activity.faculty_role || '').toLowerCase()
+  const scope = String(activity.scope || '').toLowerCase()
+  const dept = activity.department || 'Computer Science and Engineering'
+  const mode = String(activity.mode || '').toLowerCase()
+  const dateRange = formatDateRange(activity)
+  const participants = activity.participant_count
+  const host = activity.host_organisation
+  const outcomes = activity.outcomes
+
+  // Determine the nature of involvement
+  let involvementPhrase = 'participated in'
+  let roleDesc = 'participant'
+  if (role.includes('organis') || role.includes('organiz') || role.includes('coordinator') || role.includes('convenor') || role.includes('head')) {
+    involvementPhrase = 'successfully organised and coordinated'
+    roleDesc = 'organiser and coordinator'
+  } else if (role.includes('speaker') || role.includes('resource person') || role.includes('keynote') || role.includes('expert')) {
+    involvementPhrase = 'delivered an expert talk and served as a resource person at'
+    roleDesc = 'invited speaker'
+  } else if (role.includes('judge') || role.includes('evaluator') || role.includes('reviewer')) {
+    involvementPhrase = 'served as a distinguished judge and evaluator at'
+    roleDesc = 'evaluator'
+  } else if (role.includes('trainer') || role.includes('facilitator')) {
+    involvementPhrase = 'led and facilitated training sessions at'
+    roleDesc = 'trainer and facilitator'
+  } else if (role.includes('chair') || role.includes('session')) {
+    involvementPhrase = 'chaired a technical session at'
+    roleDesc = 'session chair'
+  }
+
+  // Build the scope/level phrase
+  let scopePhrase = 'at the institute level'
+  if (scope.includes('international')) scopePhrase = 'at the international level'
+  else if (scope.includes('national')) scopePhrase = 'at the national level'
+  else if (scope.includes('state')) scopePhrase = 'at the state level'
+  else if (scope.includes('university') || scope.includes('inter-college')) scopePhrase = 'at the university/inter-college level'
+
+  // Build host phrase
+  const hostPhrase = host && host.toLowerCase() !== 'no' && host.toLowerCase() !== 'none' && host.toLowerCase() !== 'wce'
+    ? ` organised by / at ${host}`
+    : ''
+
+  // Mode phrase
+  const modePhrase = mode && mode !== 'offline'
+    ? ` (conducted in ${mode} mode)`
+    : ''
+
+  // Outcomes sentence
+  let outcomesSentence = ''
+  if (outcomes && outcomes.trim().length > 10) {
+    outcomesSentence = ` The outcomes of this engagement were particularly noteworthy: ${outcomes.trim().endsWith('.') ? outcomes.trim() : outcomes.trim() + '.'}`
+  }
+
+  // Participants sentence
+  let participantsSentence = ''
+  if (participants && Number(participants) > 0) {
+    participantsSentence = ` The activity benefited ${participants} participants, directly contributing to the enrichment of our academic community.`
+  }
+
+  // Build type-specific opening recognition sentence
+  let typeSpecific = ''
+  if (type.includes('fdp') || type.includes('faculty development') || type.includes('training')) {
+    typeSpecific = `Your commitment to continuous professional development and lifelong learning is an inspiration to colleagues and students alike. Attending and ${roleDesc === 'organiser and coordinator' ? 'organising' : 'participating in'} such programmes directly strengthens our department's academic capacity and research culture.`
+  } else if (type.includes('research') || type.includes('publication') || type.includes('paper') || type.includes('journal')) {
+    typeSpecific = `Research dissemination at ${scope || 'reputed'} forums is a cornerstone of academic excellence. Your scholarly contribution advances the department's research profile and brings recognition to Walchand College of Engineering on the ${scope || 'academic'} stage.`
+  } else if (type.includes('guest') || type.includes('lecture') || type.includes('seminar')) {
+    typeSpecific = `Organising distinguished guest sessions bridges the gap between industry and academia, and provides students with invaluable exposure to expert practitioners and thought leaders. Your role in facilitating this knowledge exchange is deeply valued.`
+  } else if (type.includes('workshop') || type.includes('conference') || type.includes('symposium')) {
+    typeSpecific = `Events of this nature are pivotal in creating collaborative academic environments and sharing cutting-edge knowledge across disciplines. Your ${roleDesc} role has helped foster an intellectually vibrant atmosphere in our institution.`
+  } else if (type.includes('club') || type.includes('student') || type.includes('co-curricular') || type.includes('extracurricular')) {
+    typeSpecific = `Student-centric activities are the hallmark of a holistic educational experience. Your guidance and mentorship in co-curricular pursuits have a lasting and meaningful impact on student development, leadership, and innovation.`
+  } else if (type.includes('consultancy') || type.includes('project') || type.includes('industry')) {
+    typeSpecific = `Industry-academia collaboration through consultancy and sponsored projects not only brings recognition to the institution but also creates practical learning opportunities for students. Your efforts in bridging this gap are highly commendable.`
+  } else if (type.includes('award') || type.includes('achievement') || type.includes('recognition')) {
+    typeSpecific = `Achievements of this calibre reflect not only personal excellence but also the high standards of scholarship maintained at Walchand College of Engineering. This recognition is a testament to your sustained dedication and outstanding professional conduct.`
+  } else {
+    typeSpecific = `Your consistent efforts in enriching the academic and professional environment of our department reflect the highest ideals of a dedicated educator and researcher.`
+  }
+
+  const opening = `The Department of ${dept} takes great pleasure in recognising and placing on official record its sincere appreciation to ${name} for ${involvementPhrase} the ${type} titled "${title}"${hostPhrase}${modePhrase}, held on ${dateRange} ${scopePhrase}.`
+
+  const body = `${typeSpecific}${outcomesSentence}${participantsSentence}`
+
+  const closing = `Your dedication, initiative, and hard work have made a substantial contribution to the academic stature, vibrant knowledge sharing, and overall excellence of the department. The Department and Walchand College of Engineering are proud of your achievement and extend heartfelt congratulations with best wishes for continued success in all your future academic and professional endeavours.`
+
+  return { opening, body, closing }
+}
+
 // ─────────────────────────────────────────────────────────────
 // APPRECIATION LETTER PDF GENERATOR (WITH HOD APPROVAL & DIGITAL SIGNATURE)
 // ─────────────────────────────────────────────────────────────
-async function generateAppreciationLetterPdf(activity, generatedBy) {
+async function generateAppreciationLetterPdf(activity, generatedBy, customSignature = null) {
   // Fetch HOD signature before starting the PDF stream
-  const hodSignatureBase64 = await fetchHodSignature(activity.department)
+  const hodSignatureBase64 = customSignature || await fetchHodSignature(activity.department)
+
+  // Build body text — use custom overrides if HOD edited them, else auto-generate
+  const autoText = buildAppreciationBody(activity)
+  const opening = activity.custom_opening || autoText.opening
+  const body = activity.custom_body || autoText.body
+  const closing = activity.custom_closing || autoText.closing
+  const reviewerName = activity.custom_reviewer_name || activity.reviewer_name || 'Dr. A. R. Surve'
+  const reviewerTitle = activity.custom_reviewer_title || 'Head of Department'
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -616,25 +716,27 @@ async function generateAppreciationLetterPdf(activity, generatedBy) {
     doc.strokeColor(`#${BRAND_GOLD}`).lineWidth(0.75).moveTo(36, 97).lineTo(559, 97).stroke()
 
     // Reference & Date
-    const refCode = `WCE/CSE/APPR/${activity.acad_year || '2025-26'}/${String(activity.act_id || 101).padStart(4, '0')}`
+    const refCode = `WCE/${(activity.department || 'CSE').replace(/[^A-Z]/gi, '').toUpperCase().slice(0, 3) || 'CSE'}/APPR/${activity.acad_year || '2025-26'}/${String(activity.act_id || 101).padStart(4, '0')}`
     doc.fillColor('#475569').font('Helvetica').fontSize(8.5)
       .text(`Ref: ${refCode}`, 38, 106)
-    const issueDate = formatDate(activity.reviewed_at || new Date())
+    const issueDate = activity.reviewed_at
+      ? new Date(activity.reviewed_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
+      : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
     doc.text(`Date of Issue: ${issueDate}`, 38, 106, { align: 'right', width: 519 })
 
     // Letter of Appreciation Ribbon Banner
-    doc.roundedRect(138, 126, 320, 32, 4).fillAndStroke('#FFFBEB', `#${BRAND_GOLD}`)
-    doc.fillColor(`#${BRAND_NAVY}`).font('Helvetica-Bold').fontSize(15)
-      .text('LETTER OF APPRECIATION', 138, 134, { width: 320, align: 'center', characterSpacing: 1.5 })
+    doc.roundedRect(118, 122, 360, 34, 4).fillAndStroke('#FFFBEB', `#${BRAND_GOLD}`)
+    doc.fillColor(`#${BRAND_NAVY}`).font('Helvetica-Bold').fontSize(16)
+      .text('LETTER OF APPRECIATION', 118, 130, { width: 360, align: 'center', characterSpacing: 1.8 })
 
     // Recipient Section
     doc.fillColor('#64748B').font('Helvetica-Oblique').fontSize(9.5)
-      .text('This letter of appreciation is proudly presented to', 38, 172, { align: 'center', width: 519 })
-    doc.fillColor(`#${BRAND_NAVY}`).font('Helvetica-Bold').fontSize(18)
-      .text(activity.staff_name || 'Contributor', 38, 188, { align: 'center', width: 519 })
+      .text('This letter of appreciation is proudly presented to', 38, 170, { align: 'center', width: 519 })
+    doc.fillColor(`#${BRAND_NAVY}`).font('Helvetica-Bold').fontSize(20)
+      .text(activity.staff_name || 'Contributor', 38, 184, { align: 'center', width: 519 })
 
     // Decorative line under name
-    doc.strokeColor(`#${BRAND_GOLD}`).lineWidth(1.2).moveTo(198, 210).lineTo(398, 210).stroke()
+    doc.strokeColor(`#${BRAND_GOLD}`).lineWidth(1.4).moveTo(190, 210).lineTo(406, 210).stroke()
 
     const recipientRole = activity.staff_designation || (String(activity.faculty_role || '').toLowerCase().includes('club') ? 'Club Representative' : 'Faculty Member')
     doc.fillColor('#334155').font('Helvetica').fontSize(9.5)
@@ -642,130 +744,134 @@ async function generateAppreciationLetterPdf(activity, generatedBy) {
     doc.fillColor('#64748B').font('Helvetica').fontSize(8.5)
       .text('Walchand College of Engineering, Sangli', 38, 229, { align: 'center', width: 519 })
 
-    // Commendation intro text
-    doc.fillColor('#1E293B').font('Helvetica').fontSize(9.5)
-      .text(`The Department of ${activity.department || 'Computer Science and Engineering'} places on record its sincere appreciation for your valuable contribution, initiative, and active involvement as ${activity.faculty_role || 'Contributor / Organizer'} in successfully conducting and completing the activity:`, 48, 248, { align: 'justify', width: 499, lineGap: 2.5 })
+    // Opening paragraph
+    doc.fillColor('#1E293B').font('Helvetica').fontSize(9.8)
+      .text(opening, 48, 250, { align: 'justify', width: 499, lineGap: 3 })
 
     // Activity Highlight Card
-    const cardY = 292
-    const cardH = 148
+    const cardY = doc.y + 12
+    const cardH = 130
     doc.roundedRect(42, cardY, 511, cardH, 5).fillAndStroke('#F8FAFC', '#CBD5E1')
     doc.rect(42, cardY, 5, cardH).fill(`#${BRAND_GOLD}`)
 
-    doc.fillColor(`#${BRAND_NAVY}`).font('Helvetica-Bold').fontSize(11.5)
-      .text(activity.title || 'Untitled Activity', 56, cardY + 12, { width: 485 })
+    doc.fillColor(`#${BRAND_NAVY}`).font('Helvetica-Bold').fontSize(12)
+      .text(activity.title || 'Untitled Activity', 56, cardY + 10, { width: 488 })
 
-    doc.fillColor('#475569').font('Helvetica').fontSize(9)
     const metaParts = [
       `Category: ${activity.type_name || 'Faculty Activity'}`,
-      `Involvement: ${activity.faculty_role || 'Organizer'}`,
+      `Involvement: ${activity.faculty_role || 'Participant'}`,
       `Academic Year: ${activity.acad_year || '2025-26'}`
     ]
-    doc.text(metaParts.join('  ·  '), 56, cardY + 30, { width: 485 })
+    doc.fillColor('#475569').font('Helvetica').fontSize(8.5)
+      .text(metaParts.join('  ·  '), 56, cardY + 28, { width: 488 })
 
-    const detailsY = cardY + 48
-    doc.fillColor('#1E293B').font('Helvetica-Bold').fontSize(8.5).text('DURATION & DATE:', 56, detailsY)
-    doc.font('Helvetica').fontSize(8.5).text(formatDateRange(activity), 160, detailsY, { width: 380 })
+    const dY = cardY + 46
+    doc.fillColor('#1E293B').font('Helvetica-Bold').fontSize(8.5).text('DURATION & DATE:', 56, dY)
+    doc.font('Helvetica').text(formatDateRange(activity), 165, dY, { width: 375 })
 
-    doc.font('Helvetica-Bold').text('MODE & SCOPE:', 56, detailsY + 16)
-    doc.font('Helvetica').text([activity.mode, activity.scope ? `${activity.scope} Level` : null].filter(Boolean).join(' · ') || 'Institute Level', 160, detailsY + 16, { width: 380 })
+    doc.font('Helvetica-Bold').text('MODE & SCOPE:', 56, dY + 16)
+    doc.font('Helvetica').text([activity.mode, activity.scope ? `${activity.scope} Level` : null].filter(Boolean).join(' · ') || 'Institute Level', 165, dY + 16, { width: 375 })
 
-    if (activity.host_organisation || activity.venue) {
-      doc.font('Helvetica-Bold').text('HOST / VENUE:', 56, detailsY + 32)
-      doc.font('Helvetica').text([activity.host_organisation, activity.venue].filter(Boolean).join(' · '), 160, detailsY + 32, { width: 380 })
+    if (activity.host_organisation && activity.host_organisation.toLowerCase() !== 'no' && activity.host_organisation.toLowerCase() !== 'none') {
+      doc.font('Helvetica-Bold').text('HOST / ORGANISER:', 56, dY + 32)
+      doc.font('Helvetica').text(activity.host_organisation + (activity.venue ? ` · ${activity.venue}` : ''), 165, dY + 32, { width: 375 })
+    } else if (activity.venue) {
+      doc.font('Helvetica-Bold').text('VENUE:', 56, dY + 32)
+      doc.font('Helvetica').text(activity.venue, 165, dY + 32, { width: 375 })
     }
 
     if (activity.participant_count) {
-      doc.font('Helvetica-Bold').text('BENEFICIARIES:', 56, detailsY + 48)
-      doc.font('Helvetica').text(`${activity.participant_count} Registered Participants / Beneficiaries`, 160, detailsY + 48, { width: 380 })
+      doc.font('Helvetica-Bold').text('BENEFICIARIES:', 56, dY + 48)
+      doc.font('Helvetica').text(`${activity.participant_count} Registered Participants / Beneficiaries`, 165, dY + 48, { width: 375 })
     }
 
     if (activity.summary) {
-      const sumLine = detailsY + (activity.participant_count ? 64 : 48)
+      const sumLine = dY + (activity.participant_count ? 64 : 48)
       doc.font('Helvetica-Bold').text('KEY HIGHLIGHT:', 56, sumLine)
-      doc.font('Helvetica').text(activity.summary.slice(0, 150) + (activity.summary.length > 150 ? '…' : ''), 160, sumLine, { width: 380 })
+      doc.font('Helvetica').text(activity.summary.slice(0, 160) + (activity.summary.length > 160 ? '…' : ''), 165, sumLine, { width: 375 })
     }
 
-    // Congratulatory narrative
-    doc.fillColor('#334155').font('Helvetica').fontSize(9.5)
-      .text('Your dedication, proactive initiative, and hard work have substantially contributed to the academic stature, vibrant knowledge sharing, and overall excellence of the department. The institute gratefully acknowledges your efforts and extends heartiest congratulations with best wishes for your future academic endeavours.', 48, 452, { align: 'justify', width: 499, lineGap: 2.5 })
+    // Body paragraph
+    const bodyY = cardY + cardH + 14
+    doc.fillColor('#1E293B').font('Helvetica').fontSize(9.8)
+      .text(body, 48, bodyY, { align: 'justify', width: 499, lineGap: 3 })
+
+    // Closing paragraph
+    const closingY = doc.y + 10
+    doc.fillColor('#1E293B').font('Helvetica').fontSize(9.8)
+      .text(closing, 48, closingY, { align: 'justify', width: 499, lineGap: 3 })
 
     // Bottom Stamps & Digital Signature Section
-    const stampY = 515
+    const stampY = doc.y + 18
 
     // Left Box: Seal of Authority
-    doc.roundedRect(48, stampY, 210, 115, 6).fillAndStroke('#F8FAFC', '#94A3B8')
+    doc.roundedRect(42, stampY, 215, 120, 6).fillAndStroke('#F8FAFC', '#94A3B8')
     doc.fillColor('#475569').font('Helvetica-Bold').fontSize(8.5)
-      .text('SEAL OF AUTHORITY', 48, stampY + 10, { width: 210, align: 'center' })
-    doc.strokeColor('#CBD5E1').lineWidth(0.5).moveTo(65, stampY + 23).lineTo(241, stampY + 23).stroke()
-    doc.fillColor('#1E293B').font('Helvetica-Bold').fontSize(8)
-      .text('DEPARTMENT OF COMPUTER SCIENCE & ENGG.', 55, stampY + 32, { width: 196, align: 'center' })
+      .text('SEAL OF AUTHORITY', 42, stampY + 10, { width: 215, align: 'center' })
+    doc.strokeColor('#CBD5E1').lineWidth(0.5).moveTo(58, stampY + 23).lineTo(240, stampY + 23).stroke()
+    doc.fillColor('#1E293B').font('Helvetica-Bold').fontSize(7.8)
+      .text(`DEPARTMENT OF ${(activity.department || 'Computer Science and Engineering').toUpperCase().slice(0, 38)}`, 52, stampY + 30, { width: 200, align: 'center' })
     doc.font('Helvetica').fontSize(7.5)
-      .text('Walchand College of Engineering, Sangli', 55, stampY + 46, { width: 196, align: 'center' })
-    doc.text('Autonomous Institute of Govt. of Maharashtra', 55, stampY + 58, { width: 196, align: 'center' })
+      .text('Walchand College of Engineering, Sangli', 52, stampY + 45, { width: 200, align: 'center' })
+      .text('Autonomous Institute of Govt. of Maharashtra', 52, stampY + 57, { width: 200, align: 'center' })
     doc.fillColor('#15803D').font('Helvetica-Bold').fontSize(8)
-      .text('INSTITUTIONAL RECORD: VERIFIED', 55, stampY + 76, { width: 196, align: 'center' })
+      .text('INSTITUTIONAL RECORD: VERIFIED', 52, stampY + 74, { width: 200, align: 'center' })
     doc.fillColor('#64748B').font('Helvetica').fontSize(7)
-      .text(`Approval Status: ${activity.workflow_status || 'Approved'}`, 55, stampY + 90, { width: 196, align: 'center' })
+      .text(`Approval Status: ${activity.workflow_status || 'Approved'}`, 52, stampY + 88, { width: 200, align: 'center' })
+    doc.fillColor('#64748B').font('Helvetica').fontSize(6.5)
+      .text(refCode, 52, stampY + 100, { width: 200, align: 'center' })
 
     // Right Box: HOD Digital Signature & Approval
-    doc.roundedRect(295, stampY, 255, 115, 6).fillAndStroke('#F0FDF4', '#16A34A')
-    doc.roundedRect(295, stampY, 255, 22, 4).fill('#16A34A')
+    doc.roundedRect(295, stampY, 260, 120, 6).fillAndStroke('#F0FDF4', '#16A34A')
+    doc.roundedRect(295, stampY, 260, 22, 4).fill('#16A34A')
     doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8.5)
-      .text('✓  HOD APPROVED — DIGITAL SIGNATURE', 295, stampY + 6, { width: 255, align: 'center' })
+      .text('✓  HOD APPROVED — DIGITAL SIGNATURE', 295, stampY + 6, { width: 260, align: 'center' })
 
-    const reviewerName = activity.reviewer_name || 'Dr. A. R. Surve'
-
-    // Draw the HOD's real signature image if available, else fall back to typed name
+    // Draw the HOD's signature image if available, else show typed name
     if (hodSignatureBase64) {
       try {
-        // Strip the data: URI prefix so PDFKit gets raw base64
         const imgData = hodSignatureBase64.startsWith('data:')
           ? Buffer.from(hodSignatureBase64.split(',')[1], 'base64')
           : Buffer.from(hodSignatureBase64, 'base64')
-        doc.image(imgData, 303, stampY + 27, { width: 110, height: 48, fit: [110, 48] })
+        doc.image(imgData, 310, stampY + 26, { width: 120, height: 52, fit: [120, 52] })
       } catch {
-        // Fallback: typed name in italic if image fails to render
         doc.fillColor('#14532D').font('Helvetica-BoldOblique').fontSize(14)
-          .text(reviewerName, 308, stampY + 30, { width: 230 })
+          .text(reviewerName, 308, stampY + 32, { width: 238 })
       }
     } else {
-      // No signature uploaded — show italicised name with "(signature pending)" note
-      doc.fillColor('#14532D').font('Helvetica-BoldOblique').fontSize(13)
-        .text(reviewerName, 308, stampY + 28, { width: 230 })
+      doc.fillColor('#14532D').font('Helvetica-BoldOblique').fontSize(14)
+        .text(reviewerName, 308, stampY + 30, { width: 238 })
       doc.fillColor('#64748B').font('Helvetica-Oblique').fontSize(7)
-        .text('(Signature not yet uploaded — contact HOD)', 308, stampY + 46, { width: 230 })
+        .text('(Signature not yet uploaded — contact HOD)', 308, stampY + 48, { width: 238 })
     }
 
-    doc.fillColor('#166534').font('Helvetica-Bold').fontSize(8.5)
-      .text('Head of Department', 308, stampY + 75)
+    doc.fillColor('#166534').font('Helvetica-Bold').fontSize(9)
+      .text(reviewerTitle, 308, stampY + 80)
     doc.fillColor('#15803D').font('Helvetica').fontSize(8)
-      .text(activity.department || 'Department of Computer Science and Engineering', 308, stampY + 87)
-
-    const reviewDate = activity.reviewed_at ? formatDate(activity.reviewed_at) : formatDate(new Date())
+      .text(activity.department || 'Department of Computer Science and Engineering', 308, stampY + 93)
     doc.fillColor('#166534').font('Helvetica').fontSize(7.5)
-      .text(`Approved: ${reviewDate}`, 308, stampY + 97)
+      .text(`Approved: ${issueDate}`, 308, stampY + 105)
 
+    // Verification hash
     const verHash = crypto.createHash('sha256')
       .update(`WCE-APPR-${activity.act_id}-${activity.reviewed_at || 'APPROVED'}`)
-      .digest('hex')
-      .slice(0, 16)
-      .toUpperCase()
-    doc.fillColor('#14532D').font('Courier-Bold').fontSize(6.5)
-      .text(`SHA-256: WCE-VAL-${activity.act_id || '101'}-${verHash}`, 308, stampY + 107)
-
-    // Security Notice & Footer
-    doc.strokeColor('#CBD5E1').lineWidth(0.5).moveTo(38, 642).lineTo(557, 642).stroke()
+      .digest('hex').slice(0, 16).toUpperCase()
+    doc.strokeColor('#CBD5E1').lineWidth(0.5).moveTo(38, stampY + 130).lineTo(557, stampY + 130).stroke()
     doc.fillColor('#64748B').font('Helvetica').fontSize(7.5)
-      .text('This is an official digitally signed Letter of Appreciation generated from the verified WCE Prof-Insights Academic Repository. Authenticity can be verified using the reference number and digital validation token.', 38, 648, { width: 519, align: 'center' })
+      .text('This is an official digitally signed Letter of Appreciation generated from the verified WCE Prof-Insights Academic Repository. Authenticity can be verified using the reference number and digital validation token.', 38, stampY + 136, { width: 519, align: 'center' })
+    doc.fillColor('#94A3B8').font('Courier').fontSize(6.5)
+      .text(`SHA-256: WCE-VAL-${activity.act_id || '?'}-${verHash}`, 38, stampY + 150, { width: 519, align: 'center' })
 
     doc.end()
   })
 }
 
+
+
 // ─────────────────────────────────────────────────────────────
 // SPECIALIZED ACTIVITY-SPECIFIC REPORT PDF GENERATOR (LANDSCAPE MATRIX)
 // ─────────────────────────────────────────────────────────────
+
 function generateActivitySpecificPdf(records, metadata, activityTypeName) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({

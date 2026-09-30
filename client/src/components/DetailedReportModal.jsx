@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Icon from './Icon';
 import api, { downloadResponse, getActiveToken } from '../api';
 import { formatBytes, humanize } from '../utils';
+import AppreciationLetterModal from './AppreciationLetterModal';
 
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -13,25 +14,13 @@ const formatDateDMY = (dateStr) => {
   return dateStr;
 };
 
-const DetailedReportModal = ({ activity, user, onClose }) => {
+const DetailedReportModal = ({ activity, user, onClose, showNotification }) => {
   const [downloading, setDownloading] = useState(false);
-  const [appreciationDownloading, setAppreciationDownloading] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const [loadedBlobs, setLoadedBlobs] = useState({});
+  const [showLetterModal, setShowLetterModal] = useState(false);
   const touchStartX = useRef(null);
-
-  const handleDownloadAppreciation = async () => {
-    setAppreciationDownloading(true);
-    try {
-      const response = await api.get(`/activity/${activity.act_id}/appreciation-letter`, { responseType: 'blob' });
-      downloadResponse(response, `appreciation-letter-${activity.act_id}.pdf`);
-    } catch {
-      alert('Unable to download appreciation letter. It is issued for approved activities.');
-    } finally {
-      setAppreciationDownloading(false);
-    }
-  };
 
   const photoIds = (activity?.attachments || [])
     .filter(a => a.kind === 'image' || a.mimeType?.startsWith('image/'))
@@ -141,6 +130,7 @@ const DetailedReportModal = ({ activity, user, onClose }) => {
   const facultyName = activity.staff_name || user?.name || 'Faculty Member';
 
   return (
+    <>
     <div className="modal-overlay" role="dialog" aria-modal="true">
       <div className="modal-dialog" style={{ maxWidth: '980px', width: '96vw', maxHeight: '94vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
@@ -426,12 +416,11 @@ const DetailedReportModal = ({ activity, user, onClose }) => {
                 className="btn btn-secondary"
                 type="button"
                 style={{ background: '#fef3c7', borderColor: '#fde68a', color: '#92400e', fontWeight: 650 }}
-                disabled={appreciationDownloading}
-                onClick={handleDownloadAppreciation}
-                title="Download official Appreciation Letter with HOD approval and digital signature"
+                onClick={() => setShowLetterModal(true)}
+                title="View, edit and download the official Appreciation Letter"
               >
-                {appreciationDownloading ? <span className="button-spinner" /> : <Icon name="award" size={16} />}
-                {appreciationDownloading ? 'Generating…' : 'Appreciation Letter (PDF)'}
+                <Icon name="award" size={16} />
+                Appreciation Letter
               </button>
             )}
             <button className="btn btn-primary" type="button" disabled={downloading} onClick={handleDownloadPDF}>
@@ -497,7 +486,18 @@ const DetailedReportModal = ({ activity, user, onClose }) => {
         </div>
       )}
     </div>
+    {showLetterModal && (
+      <AppreciationLetterModal
+        activityId={activity.act_id}
+        activityTitle={activity.title}
+        user={user}
+        onClose={() => setShowLetterModal(false)}
+        showNotification={showNotification}
+      />
+    )}
+    </>
   );
 };
+
 
 export default DetailedReportModal;
