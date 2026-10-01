@@ -352,7 +352,12 @@ const LetterPreview = ({ act, edits, hodSignature, drawnSignature }) => {
   const issueDateRaw = act.details?.appreciation_letter?.issued_at || act.reviewed_at || new Date();
   const issueDateStr = new Date(issueDateRaw).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
   const sigToShow = drawnSignature || hodSignature;
-  const recipientRole = act.staff_designation || (String(act.faculty_role || '').toLowerCase().includes('club') ? 'Club Representative' : 'Faculty Member');
+  const isClub = String(act.staff_designation || '').toLowerCase().includes('club') ||
+    String(act.faculty_role || '').toLowerCase().includes('club') ||
+    String(act.type_name || '').toLowerCase().includes('club');
+  const recipientRole = isClub
+    ? `Club — ${act.staff_name || 'Club Representative'}`
+    : (act.staff_designation || 'Faculty Member');
 
   return (
     <div style={{ background: '#fff', border: '2.5px solid #1a365d', borderRadius: '2px', padding: '28px 32px 24px', fontFamily: 'Georgia, serif', fontSize: '10.5px', color: '#1e293b', boxShadow: '0 4px 24px rgba(0,0,0,0.13)', position: 'relative', minHeight: '880px' }}>

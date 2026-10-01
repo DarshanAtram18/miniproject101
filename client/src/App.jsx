@@ -55,8 +55,21 @@ const App = () => {
   const [editingActivity, setEditingActivity] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const notificationTimer = useRef(null);
+  const notifPollTimer = useRef(null);
   const lastFilters = useRef({ page: 1 });
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await api.get('/notifications');
+      setNotifications(res.data.notifications || []);
+      setUnreadCount(res.data.unreadCount || 0);
+    } catch {
+      // Ignore - notifications are non-critical
+    }
+  };
 
   const showNotification = (message, kind = 'success') => {
     window.clearTimeout(notificationTimer.current);
@@ -113,6 +126,31 @@ const App = () => {
     hydrate();
     return () => { cancelled = true; };
   }, [session?.token]);
+
+  // Fetch notifications on login and poll every 60 seconds
+  useEffect(() => {
+    if (!session?.token) { setNotifications([]); setUnreadCount(0); return; }
+    fetchNotifications();
+    notifPollTimer.current = window.setInterval(fetchNotifications, 60_000);
+    return () => window.clearInterval(notifPollTimer.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.token]);
+
+  const markNotificationRead = async (id) => {
+    try {
+      await api.patch(`/notifications/${id}/read`);
+      setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, is_read: true } : n));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch { /* ignore */ }
+  };
+
+  const markAllNotificationsRead = async () => {
+    try {
+      await api.patch('/notifications/read-all');
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+    } catch { /* ignore */ }
+  };
 
   const login = async ({ email, password }) => {
     setLoginLoading(true);
@@ -259,7 +297,7 @@ const App = () => {
 
   return (
     <div id="app">
-      <Header activeNav={view} navigate={navigate} logout={logout} user={user} />
+      <Header activeNav={view} navigate={navigate} logout={logout} user={user} notifications={notifications} unreadCount={unreadCount} onMarkRead={markNotificationRead} onMarkAllRead={markAllNotificationsRead} />
       <Breadcrumb current={viewLabels[view]} navigate={navigate} />
       <main className="app-main" id="main-content">
         {view === 'dashboard' && <Dashboard user={user} records={records} total={pagination.total} loading={recordsLoading} error={recordsError} navigate={navigate} reload={() => loadRecords({ page: 1 })} />}

@@ -104,7 +104,11 @@ const Profile = ({ user, onChangePassword, onSignOut }) => {
   return (
     <div className="profile-page">
       <div className="page-heading">
-        <div><span className="eyebrow">Faculty identity</span><h1>My profile and security</h1><p>Your department is used as the verified source for every new activity and report.</p></div>
+        <div>
+          <span className="eyebrow">{user.role === 'Club' ? 'Club identity' : user.role === 'HOD' || user.role === 'Admin' ? 'HOD identity' : 'Faculty identity'}</span>
+          <h1>My profile and security</h1>
+          <p>{user.role === 'Club' ? 'Your club name and department are used as the verified source for every activity submission and report.' : 'Your department is used as the verified source for every new activity and report.'}</p>
+        </div>
       </div>
 
       <div className="profile-layout">

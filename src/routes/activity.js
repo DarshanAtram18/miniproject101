@@ -719,6 +719,20 @@ router.post('/:activityId/appreciation-letter/issue', async (req, res) => {
 
       await client.query('COMMIT')
       const updatedActivity = await getActivityById(activityId)
+
+      // Create in-app notification for the faculty/club member
+      try {
+        const notifTitle = '🏅 Appreciation Letter Awarded!'
+        const notifMsg = `Your HOD has issued an official Letter of Appreciation for your activity: "${activity.title || 'activity'}". You can now view and download it from your activity records.`
+        await pool.query(
+          `INSERT INTO notifications (user_id, kind, title, message, activity_id) VALUES ($1, $2, $3, $4, $5)`,
+          [activity.staff_id, 'appreciation', notifTitle, notifMsg, activityId]
+        )
+      } catch (notifErr) {
+        console.warn('Could not create appreciation notification:', notifErr.message)
+        // Non-critical – do not fail the main response
+      }
+
       return res.json({
         success: true,
         message: 'Official Appreciation Letter successfully issued and sent to faculty member.',

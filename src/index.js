@@ -12,6 +12,7 @@ const authRoutes = require('./routes/auth')
 const activityRoutes = require('./routes/activity')
 const adminRoutes = require('./routes/admin')
 const reportRoutes = require('./routes/reports')
+const notificationRoutes = require('./routes/notifications')
 
 const app = express()
 const port = Number(process.env.PORT || 3000)
@@ -86,6 +87,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/activity', activityRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/reports', reportRoutes)
+app.use('/api/notifications', notificationRoutes)
 
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'API endpoint not found.' })

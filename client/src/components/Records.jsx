@@ -251,18 +251,18 @@ const Records = ({
                           <div className="row-actions">
                             <button className="icon-button" type="button" onClick={() => openRecord(record)} aria-label={`View ${record.title}`} title="View details"><Icon name="eye" size={18} /></button>
                             <button className="icon-button" type="button" onClick={() => openDetailedReport(record)} aria-label="Official Detailed Report" title="View &amp; Download Detailed Event Report"><Icon name="reports" size={18} /></button>
-                            {isReviewer ? (
+                            {isReviewer && (record.workflow_status === 'Approved' || isAppreciationIssued(record)) ? (
                               <button
                                 className="icon-button"
                                 type="button"
                                 onClick={() => openAppreciationLetter(record)}
                                 aria-label="Appreciation Letter"
-                                title={isAppreciationIssued(record) ? 'Manage Issued Appreciation Letter' : 'Issue Appreciation Letter to Faculty'}
+                                title={isAppreciationIssued(record) ? 'Manage Issued Appreciation Letter' : 'Issue & Send Appreciation Letter to Faculty'}
                                 style={{ color: isAppreciationIssued(record) ? '#15803d' : '#b7791f' }}
                               >
                                 <Icon name="award" size={18} />
                               </button>
-                            ) : (record.workflow_status === 'Approved' && isAppreciationIssued(record)) ? (
+                            ) : !isReviewer && record.workflow_status === 'Approved' && isAppreciationIssued(record) ? (
                               <button
                                 className="icon-button"
                                 type="button"
@@ -304,17 +304,17 @@ const Records = ({
           footer={
             <>
               <button className="btn btn-secondary" type="button" onClick={closeRecord}>Close</button>
-              {isReviewer ? (
+              {isReviewer && (viewedRecord.workflow_status === 'Approved' || isAppreciationIssued(viewedRecord)) ? (
                 <button
                   className="btn btn-secondary"
                   type="button"
                   style={{ background: isAppreciationIssued(viewedRecord) ? '#f0fdf4' : '#fef3c7', borderColor: isAppreciationIssued(viewedRecord) ? '#bbf7d0' : '#fde68a', color: isAppreciationIssued(viewedRecord) ? '#15803d' : '#92400e', fontWeight: 700 }}
                   onClick={() => openAppreciationLetter(viewedRecord)}
-                  title="Manage, customize, digitally sign, and issue official Appreciation Letter"
+                  title="Manage, customize, digitally sign, and send official Appreciation Letter to faculty"
                 >
-                  <Icon name="award" size={16} /> {isAppreciationIssued(viewedRecord) ? '✓ Appreciation Letter (Issued)' : 'Issue Appreciation Letter'}
+                  <Icon name="award" size={16} /> {isAppreciationIssued(viewedRecord) ? '✓ Appreciation Letter (Issued)' : '📤 Send Appreciation Letter'}
                 </button>
-              ) : (viewedRecord.workflow_status === 'Approved' && isAppreciationIssued(viewedRecord)) ? (
+              ) : !isReviewer && viewedRecord.workflow_status === 'Approved' && isAppreciationIssued(viewedRecord) ? (
                 <button
                   className="btn btn-secondary"
                   type="button"
@@ -378,6 +378,17 @@ const Records = ({
               {viewedRecord.audit?.length > 0 && <section className="detail-section"><h3>Review and change history</h3><ol className="audit-timeline">{viewedRecord.audit.map((entry) => <li key={entry.id}><span className="audit-dot" /><div><strong>{entry.action}</strong><span>{entry.actorName || 'System'} · {new Date(entry.createdAt).toLocaleString('en-IN')}</span>{entry.note && <p>{entry.note}</p>}</div></li>)}</ol></section>}
 
               {isReviewer && viewedRecord.workflow_status === 'Submitted' && Number(viewedRecord.staff_id) !== Number(user.id) && <section className="review-decision-panel"><h3>Reviewer decision</h3><label htmlFor="review-comment">Comment <span>{reviewComment ? '' : 'required when requesting changes'}</span></label><textarea id="review-comment" className="form-control" rows="3" value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} placeholder="Give clear, actionable corrections when returning a record." /><div className="review-actions"><button className="btn btn-secondary" type="button" disabled={reviewing || !reviewComment.trim()} onClick={() => submitReview('Changes Requested')}>Request Changes</button><button className="btn btn-primary" type="button" disabled={reviewing} onClick={() => submitReview('Approved')}><Icon name="check" size={17} /> Approve Activity</button></div></section>}
+              {isReviewer && viewedRecord.workflow_status === 'Approved' && Number(viewedRecord.staff_id) !== Number(user.id) && !isAppreciationIssued(viewedRecord) && (
+                <section className="review-decision-panel" style={{ background: '#fffbeb', borderColor: '#fde68a' }}>
+                  <h3 style={{ color: '#92400e' }}>🏅 Send Appreciation Letter</h3>
+                  <p style={{ fontSize: '0.875rem', color: '#78350f', marginBottom: '12px' }}>This activity is approved. You may now issue and send an official Appreciation Letter to the {viewedRecord.staff_name?.includes('Club') || String(viewedRecord.faculty_role || '').toLowerCase().includes('club') ? 'club' : 'faculty member'}.</p>
+                  <div className="review-actions">
+                    <button className="btn btn-primary" type="button" style={{ background: '#b45309', borderColor: '#92400e' }} onClick={() => { closeRecord(); openAppreciationLetter(viewedRecord); }}>
+                      <Icon name="award" size={17} /> Open Appreciation Letter
+                    </button>
+                  </div>
+                </section>
+              )}
             </div>
           )}
         </Modal>
