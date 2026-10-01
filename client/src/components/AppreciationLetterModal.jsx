@@ -452,7 +452,10 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
   const [issuedBy, setIssuedBy] = useState(null);
   const [edits, setEdits] = useState({ opening: '', body: '', closing: '', reviewerName: '', reviewerTitle: '' });
   const [serverIsHod, setServerIsHod] = useState(null);
-  const isHod = Boolean(['HOD', 'Admin'].includes(user?.role) && serverIsHod !== false);
+  // isHod is true ONLY if both client-side role AND server confirmed it
+  // Faculty and Club roles can NEVER be isHod under any circumstance
+  const clientIsHod = ['HOD', 'Admin'].includes(user?.role);
+  const isHod = Boolean(clientIsHod && serverIsHod !== false);
 
   useEffect(() => {
     setLoading(true);
@@ -561,8 +564,9 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
     }
   };
 
+  // Hard guard — faculty/club absolutely cannot switch to edit/sign tabs
   const switchTab = (id) => {
-    if (!isHod && id !== 'preview') return;
+    if (!isHod) return; // Block all tab switching for non-HOD
     setActiveTab(id);
   };
 
@@ -584,12 +588,21 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
   );
 
   if (error) return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.8)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '14px', padding: '36px', maxWidth: '450px', textAlign: 'center', boxShadow: '0 24px 48px rgba(0,0,0,0.35)' }}>
-        <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔒</div>
-        <div style={{ color: '#0f172a', fontWeight: 800, marginBottom: '8px', fontSize: '17px' }}>Official Commendation Pending Issuance</div>
-        <div style={{ color: '#64748b', fontSize: '13px', marginBottom: '24px', lineHeight: 1.6 }}>{error}</div>
-        <button onClick={onClose} style={{ padding: '10px 32px', background: '#1a365d', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}>Understood</button>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.85)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '16px', padding: '40px 36px', maxWidth: '480px', width: '100%', textAlign: 'center', boxShadow: '0 24px 60px rgba(0,0,0,0.4)' }}>
+        <div style={{ width: '64px', height: '64px', background: 'linear-gradient(135deg,#1a365d,#2a4d8f)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '28px' }}>🔒</div>
+        <div style={{ color: '#0f172a', fontWeight: 900, marginBottom: '8px', fontSize: '18px', fontFamily: 'Arial, sans-serif' }}>Appreciation Letter Not Yet Issued</div>
+        <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '10px', padding: '14px', marginBottom: '16px', textAlign: 'left' }}>
+          <div style={{ color: '#0369a1', fontWeight: 700, fontSize: '12px', marginBottom: '6px' }}>📋 How it works:</div>
+          <ol style={{ margin: 0, paddingLeft: '18px', color: '#0c4a6e', fontSize: '12px', lineHeight: 1.7 }}>
+            <li>Your activity must be <strong>approved</strong> by HOD</li>
+            <li>HOD reviews and personalises the appreciation letter</li>
+            <li>HOD officially issues and sends it to your account</li>
+            <li>You will receive a <strong>bell notification</strong> when it is ready</li>
+          </ol>
+        </div>
+        <div style={{ color: '#64748b', fontSize: '12.5px', marginBottom: '20px', lineHeight: 1.6 }}>{error}</div>
+        <button onClick={onClose} style={{ padding: '11px 36px', background: 'linear-gradient(135deg,#1a365d,#2a4d8f)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}>Understood</button>
       </div>
     </div>
   );
@@ -770,11 +783,7 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
               style={{ padding: '9px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}>
               Close
             </button>
-            {!isHod && (
-              <span style={{ fontSize: '11.5px', color: '#166534', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                <Icon name="check" size={14} /> Official Verified Document · Digitally Signed by HOD
-              </span>
-            )}
+            {/* HOD-only shortcut buttons */}
             {isHod && (
               <>
                 <button type="button" onClick={() => switchTab('edit')}
@@ -787,62 +796,55 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
                 </button>
               </>
             )}
+            {/* Faculty/Club: verified badge only */}
+            {!isHod && (
+              <span style={{ fontSize: '11.5px', color: '#166534', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <Icon name="check" size={14} /> Official Document · Issued & Verified by HOD · Read-Only
+              </span>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            {/* Primary Action for HOD: Issue & Send to Faculty */}
+            {/* HOD: Issue & Send button */}
             {isHod && (
               <button
                 type="button"
                 onClick={handleIssueLetter}
                 disabled={issuing}
                 style={{
-                  padding: '10px 22px',
-                  border: 'none',
-                  borderRadius: '8px',
+                  padding: '10px 22px', border: 'none', borderRadius: '8px',
                   background: isIssued ? '#16a34a' : 'linear-gradient(135deg, #15803d 0%, #16a34a 100%)',
-                  color: '#fff',
-                  fontSize: '13px',
-                  fontWeight: 800,
+                  color: '#fff', fontSize: '13px', fontWeight: 800,
                   cursor: issuing ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  boxShadow: '0 4px 12px rgba(22,163,74,0.3)',
-                  transition: 'all 0.15s'
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  boxShadow: '0 4px 12px rgba(22,163,74,0.3)', transition: 'all 0.15s'
                 }}
               >
-                {issuing ? '⏳ Delivering Letter...' : isIssued ? '✅ Update & Re-Send to Faculty' : '📤 Issue & Send to Faculty'}
+                {issuing ? '⏳ Sending Letter...' : isIssued ? '✅ Re-Send to Faculty / Club' : '📤 Issue & Send to Faculty / Club'}
               </button>
             )}
 
-            {/* Download Button */}
-            <button
-              type="button"
-              onClick={handleDownload}
-              disabled={downloading}
-              style={{
-                padding: '10px 24px',
-                border: 'none',
-                borderRadius: '8px',
-                background: downloading
-                  ? '#94a3b8'
-                  : isHod
+            {/* Download: HOD always, Faculty/Club ONLY if letter is officially issued */}
+            {(isHod || isIssued) && (
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={downloading}
+                style={{
+                  padding: '10px 24px', border: 'none', borderRadius: '8px',
+                  background: downloading ? '#94a3b8' : isHod
                     ? 'linear-gradient(135deg,#1a365d,#2a4d8f)'
                     : 'linear-gradient(135deg, #15803d 0%, #16a34a 100%)',
-                color: '#fff',
-                fontSize: '13px',
-                fontWeight: 800,
-                cursor: downloading ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                boxShadow: isHod ? undefined : '0 4px 14px rgba(22,163,74,0.3)',
-                transition: 'opacity 0.2s'
-              }}
-            >
-              {downloading ? '⏳ Generating PDF...' : <><Icon name="download" size={16} /> {isHod ? 'Download PDF' : 'Download Official Letter (PDF)'}</>}
-            </button>
+                  color: '#fff', fontSize: '13px', fontWeight: 800,
+                  cursor: downloading ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  boxShadow: isHod ? undefined : '0 4px 14px rgba(22,163,74,0.3)',
+                  transition: 'opacity 0.2s'
+                }}
+              >
+                {downloading ? '⏳ Generating PDF...' : <><Icon name="download" size={16} /> {isHod ? 'Download PDF' : 'Download Official Letter (PDF)'}</>}
+              </button>
+            )}
           </div>
         </div>
       </div>
