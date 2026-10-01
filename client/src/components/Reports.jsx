@@ -314,16 +314,63 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
                 >
                   <Icon name="reports" size={16} /> View Official Report
                 </button>
-                <button
-                  className="btn btn-warning"
-                  type="button"
-                  disabled={!selectedSingleActId}
-                  onClick={() => openSingleAppreciation(selectedSingleActId)}
-                  title="View, edit and download HOD Approved Appreciation Letter"
-                >
-                  <Icon name="award" size={16} />
-                  Appreciation Letter (PDF)
-                </button>
+                {isReviewer ? (
+                  <button
+                    className="btn btn-warning"
+                    type="button"
+                    disabled={!selectedSingleActId}
+                    onClick={() => openSingleAppreciation(selectedSingleActId)}
+                    title={records.find((r) => String(r.act_id) === String(selectedSingleActId))?.details?.appreciation_letter?.issued ? 'Manage and view issued Appreciation Letter' : 'Review, customize, sign and issue Appreciation Letter to faculty'}
+                  >
+                    <Icon name="award" size={16} />
+                    {records.find((r) => String(r.act_id) === String(selectedSingleActId))?.details?.appreciation_letter?.issued ? 'Appreciation Letter (Issued)' : 'Issue Appreciation Letter'}
+                  </button>
+                ) : (() => {
+                  const sel = records.find((r) => String(r.act_id) === String(selectedSingleActId));
+                  let det = sel?.details;
+                  if (typeof det === 'string') {
+                    try { det = JSON.parse(det); } catch { det = null; }
+                  }
+                  const isIssued = Boolean(det?.appreciation_letter?.issued || sel?.appreciation_issued);
+                  if (sel?.workflow_status === 'Approved' && isIssued) {
+                    return (
+                      <button
+                        className="btn btn-warning"
+                        type="button"
+                        disabled={!selectedSingleActId}
+                        onClick={() => openSingleAppreciation(selectedSingleActId)}
+                        title="View and download your official Letter of Appreciation awarded by HOD"
+                        style={{ background: '#dcfce7', borderColor: '#86efac', color: '#166534', fontWeight: 700 }}
+                      >
+                        <Icon name="award" size={16} />
+                        🏅 Awarded Appreciation Letter
+                      </button>
+                    );
+                  }
+                  if (selectedSingleActId) {
+                    return (
+                      <span
+                        style={{
+                          fontSize: '11.5px',
+                          color: '#64748b',
+                          fontStyle: 'italic',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '6px 12px',
+                          background: '#f8fafc',
+                          borderRadius: '6px',
+                          border: '1px solid #e2e8f0'
+                        }}
+                        title="Appreciation Letters are issued exclusively by the Head of Department after activity approval."
+                      >
+                        <Icon name="award" size={14} />
+                        {sel?.workflow_status === 'Approved' ? 'Letter pending HOD issuance' : 'Letter available after HOD approval & issuance'}
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             </div>
           </div>

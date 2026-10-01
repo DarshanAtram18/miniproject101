@@ -22,6 +22,16 @@ const DetailedReportModal = ({ activity, user, onClose, showNotification }) => {
   const [showLetterModal, setShowLetterModal] = useState(false);
   const touchStartX = useRef(null);
 
+  const isReviewer = ['HOD', 'Admin'].includes(user?.role);
+  const isAppreciationIssued = (() => {
+    if (!activity) return false;
+    let det = activity.details;
+    if (typeof det === 'string') {
+      try { det = JSON.parse(det); } catch { det = null; }
+    }
+    return Boolean(det?.appreciation_letter?.issued || activity.appreciation_issued);
+  })();
+
   const photoIds = (activity?.attachments || [])
     .filter(a => a.kind === 'image' || a.mimeType?.startsWith('image/'))
     .map(p => p.id)
@@ -411,18 +421,34 @@ const DetailedReportModal = ({ activity, user, onClose, showNotification }) => {
           </span>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button className="btn btn-secondary" type="button" onClick={onClose}>Close</button>
-            {(activity.workflow_status === 'Approved' || ['HOD', 'Admin'].includes(user?.role)) && (
+            {isReviewer ? (
               <button
                 className="btn btn-secondary"
                 type="button"
-                style={{ background: '#fef3c7', borderColor: '#fde68a', color: '#92400e', fontWeight: 650 }}
+                style={{
+                  background: isAppreciationIssued ? '#f0fdf4' : '#fef3c7',
+                  borderColor: isAppreciationIssued ? '#bbf7d0' : '#fde68a',
+                  color: isAppreciationIssued ? '#15803d' : '#92400e',
+                  fontWeight: 650
+                }}
                 onClick={() => setShowLetterModal(true)}
-                title="View, edit and download the official Appreciation Letter"
+                title={isAppreciationIssued ? 'Manage and view issued Appreciation Letter' : 'Review, customize, sign and issue Appreciation Letter to faculty'}
               >
                 <Icon name="award" size={16} />
-                Appreciation Letter
+                {isAppreciationIssued ? '✓ Appreciation Letter (Issued)' : 'Issue Appreciation Letter'}
               </button>
-            )}
+            ) : (activity.workflow_status === 'Approved' && isAppreciationIssued) ? (
+              <button
+                className="btn btn-secondary"
+                type="button"
+                style={{ background: '#dcfce7', borderColor: '#86efac', color: '#166534', fontWeight: 700 }}
+                onClick={() => setShowLetterModal(true)}
+                title="View and download the official Letter of Appreciation awarded to you by HOD"
+              >
+                <Icon name="award" size={16} />
+                🏅 Awarded Appreciation Letter
+              </button>
+            ) : null}
             <button className="btn btn-primary" type="button" disabled={downloading} onClick={handleDownloadPDF}>
               {downloading ? <span className="button-spinner" /> : <Icon name="download" size={16} />}
               {downloading ? 'Generating…' : 'Download PDF'}

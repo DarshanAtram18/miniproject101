@@ -608,7 +608,7 @@ router.get('/:activityId/attachments/:attachmentId', async (req, res) => {
   }
 })
 
-// GET: Return activity data for client-side letter preview
+// GET: Return activity data for letter preview (HOD can preview & edit; Faculty can ONLY view if approved & issued by HOD)
 router.get('/:activityId/appreciation-letter/preview', async (req, res) => {
   try {
     const activity = await getActivityById(req.params.activityId)
@@ -616,6 +616,18 @@ router.get('/:activityId/appreciation-letter/preview', async (req, res) => {
     if (!canAccessActivity(req.user, activity)) {
       return res.status(403).json({ error: 'You do not have permission to view this appreciation letter.' })
     }
+
+    const isHod = ['HOD', 'Admin'].includes(req.user.role)
+    const letterData = activity.details?.appreciation_letter || null
+    const isIssued = Boolean(letterData && letterData.issued)
+
+    // Faculty/Club can ONLY view if the activity is officially Approved AND issued by HOD
+    if (!isHod && (activity.workflow_status !== 'Approved' || !isIssued)) {
+      return res.status(403).json({
+        error: 'The Appreciation Letter has not been issued by the Head of Department yet. Once your activity is approved and the letter is officially issued by your HOD, it will appear here.'
+      })
+    }
+
     // Fetch HOD signature for the department
     const dbPool = require('../db/pool')
     const sigResult = await dbPool.query(
@@ -623,15 +635,108 @@ router.get('/:activityId/appreciation-letter/preview', async (req, res) => {
       [activity.department || '']
     ).catch(() => ({ rows: [] }))
     const hasHodSignature = sigResult.rows.length > 0
-    const hodSignatureData = sigResult.rows[0]?.signature_image || null
-    return res.json({ activity, hasHodSignature, hodSignatureData })
+    const hodSignatureData = letterData?.custom_signature || sigResult.rows[0]?.signature_image || null
+
+    return res.json({
+      activity,
+      hasHodSignature,
+      hodSignatureData,
+      isIssued,
+      issuedAt: letterData?.issued_at || null,
+      issuedBy: letterData?.issued_by_name || null,
+      letterData,
+      isHod
+    })
   } catch (error) {
     console.error('Appreciation letter preview error:', error)
     return res.status(500).json({ error: 'Unable to load appreciation letter preview.' })
   }
 })
 
-// GET: Download PDF (standard path)
+// POST: HOD issues and sends the Appreciation Letter to the faculty member's portal
+router.post('/:activityId/appreciation-letter/issue', async (req, res) => {
+  try {
+    const isHod = ['HOD', 'Admin'].includes(req.user.role)
+    if (!isHod) {
+      return res.status(403).json({ error: 'Only the Head of Department or Administrator can issue an Appreciation Letter.' })
+    }
+
+    const activityId = Number(req.params.activityId)
+    const activity = await getActivityById(activityId)
+    if (!activity) return res.status(404).json({ error: 'Activity not found.' })
+    if (!canAccessActivity(req.user, activity)) {
+      return res.status(403).json({ error: 'You cannot issue letters for activities outside your department.' })
+    }
+
+    const overrides = req.body.overrides || {}
+    const customSignature = req.body.customSignature || null
+
+    const existingDetails = activity.details || {}
+    const appreciationLetterData = {
+      issued: true,
+      issued_at: new Date().toISOString(),
+      issued_by_id: req.user.id,
+      issued_by_name: overrides.custom_reviewer_name || req.user.name || 'Dr. A. R. Surve',
+      issued_by_title: overrides.custom_reviewer_title || req.user.designation || 'Head of Department',
+      custom_opening: overrides.custom_opening || null,
+      custom_body: overrides.custom_body || null,
+      custom_closing: overrides.custom_closing || null,
+      custom_signature: customSignature || existingDetails.appreciation_letter?.custom_signature || null
+    }
+
+    const updatedDetails = {
+      ...existingDetails,
+      appreciation_letter: appreciationLetterData
+    }
+
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      // If activity was not yet Approved, approve it as part of issuing
+      const shouldApprove = activity.workflow_status !== 'Approved'
+      await client.query(
+        `UPDATE activity
+         SET details = $1,
+             workflow_status = CASE WHEN $2::boolean THEN 'Approved' ELSE workflow_status END,
+             approved = CASE WHEN $2::boolean THEN TRUE ELSE approved END,
+             reviewed_at = CASE WHEN $2::boolean THEN NOW() ELSE reviewed_at END,
+             reviewed_by = CASE WHEN $2::boolean THEN $3 ELSE reviewed_by END,
+             updated_at = NOW(),
+             version = version + 1
+         WHERE act_id = $4`,
+        [JSON.stringify(updatedDetails), shouldApprove, req.user.id, activityId]
+      )
+
+      await insertAudit(
+        client,
+        activityId,
+        req.user.id,
+        'Appreciation Letter Issued',
+        activity.workflow_status,
+        shouldApprove ? 'Approved' : activity.workflow_status,
+        'Official Appreciation Letter issued and delivered to faculty member by HOD.'
+      )
+
+      await client.query('COMMIT')
+      const updatedActivity = await getActivityById(activityId)
+      return res.json({
+        success: true,
+        message: 'Official Appreciation Letter successfully issued and sent to faculty member.',
+        activity: updatedActivity
+      })
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
+  } catch (error) {
+    console.error('Issue appreciation letter error:', error)
+    return res.status(500).json({ error: 'Unable to issue appreciation letter.' })
+  }
+})
+
+// GET: Download PDF (Faculty can only download if Approved and Issued; HOD can download anytime)
 router.get('/:activityId/appreciation-letter', async (req, res) => {
   try {
     const activity = await getActivityById(req.params.activityId)
@@ -639,6 +744,16 @@ router.get('/:activityId/appreciation-letter', async (req, res) => {
     if (!canAccessActivity(req.user, activity)) {
       return res.status(403).json({ error: 'You do not have permission to download this appreciation letter.' })
     }
+
+    const isHod = ['HOD', 'Admin'].includes(req.user.role)
+    const letterData = activity.details?.appreciation_letter || null
+    const isIssued = Boolean(letterData && letterData.issued)
+
+    // Non-HOD users can only download if approved AND issued by HOD
+    if (!isHod && (activity.workflow_status !== 'Approved' || !isIssued)) {
+      return res.status(403).json({ error: 'The Appreciation Letter has not been issued by the Head of Department yet.' })
+    }
+
     const pdfBuffer = await generateAppreciationLetterPdf(activity, req.user)
     const safeName = String(activity.title || 'activity')
       .replace(/[^a-zA-Z0-9 -]/g, '')
@@ -658,14 +773,20 @@ router.get('/:activityId/appreciation-letter', async (req, res) => {
   }
 })
 
-// POST: Generate PDF with HOD-edited overrides
+// POST: Generate PDF with HOD-edited overrides (HOD / Admin only)
 router.post('/:activityId/appreciation-letter', async (req, res) => {
   try {
+    const isHod = ['HOD', 'Admin'].includes(req.user.role)
+    if (!isHod) {
+      return res.status(403).json({ error: 'Only the Head of Department can customize or generate letters with overrides.' })
+    }
+
     const activity = await getActivityById(req.params.activityId)
     if (!activity) return res.status(404).json({ error: 'Activity not found.' })
     if (!canAccessActivity(req.user, activity)) {
       return res.status(403).json({ error: 'You do not have permission.' })
     }
+
     // Merge overrides from HOD editor into the activity
     const overrides = req.body.overrides || {}
     const customSignature = req.body.customSignature || null // base64 drawn signature

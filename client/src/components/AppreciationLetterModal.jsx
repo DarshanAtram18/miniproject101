@@ -343,14 +343,14 @@ const LetterPreview = ({ act, edits, hodSignature, drawnSignature }) => {
   const opening = edits.opening || auto.opening;
   const body = edits.body || auto.body;
   const closing = edits.closing || auto.closing;
-  const reviewerName = edits.reviewerName || act.reviewer_name || 'Dr. A. R. Surve';
-  const reviewerTitle = edits.reviewerTitle || 'Head of Department';
+  const reviewerName = edits.reviewerName || act.details?.appreciation_letter?.issued_by_name || act.reviewer_name || 'Dr. A. R. Surve';
+  const reviewerTitle = edits.reviewerTitle || act.details?.appreciation_letter?.issued_by_title || 'Head of Department';
   const dept = act.department || 'Computer Science and Engineering';
   const deptAbbr = dept.replace(/[^A-Z]/g, '').slice(0, 3) || 'CSE';
   const refCode = `WCE/${deptAbbr}/APPR/${act.acad_year || '2025-26'}/${String(act.act_id || 101).padStart(4, '0')}`;
-  const issueDateStr = act.reviewed_at
-    ? new Date(act.reviewed_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
-    : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+  
+  const issueDateRaw = act.details?.appreciation_letter?.issued_at || act.reviewed_at || new Date();
+  const issueDateStr = new Date(issueDateRaw).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
   const sigToShow = drawnSignature || hodSignature;
   const recipientRole = act.staff_designation || (String(act.faculty_role || '').toLowerCase().includes('club') ? 'Club Representative' : 'Faculty Member');
 
@@ -441,8 +441,13 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
   const [drawnSignature, setDrawnSignature] = useState(null);
   const [activeTab, setActiveTab] = useState('preview');
   const [downloading, setDownloading] = useState(false);
+  const [issuing, setIssuing] = useState(false);
+  const [isIssued, setIsIssued] = useState(false);
+  const [issuedAt, setIssuedAt] = useState(null);
+  const [issuedBy, setIssuedBy] = useState(null);
   const [edits, setEdits] = useState({ opening: '', body: '', closing: '', reviewerName: '', reviewerTitle: '' });
-  const isHod = ['HOD', 'Admin'].includes(user?.role);
+  const [serverIsHod, setServerIsHod] = useState(null);
+  const isHod = Boolean(['HOD', 'Admin'].includes(user?.role) && serverIsHod !== false);
 
   useEffect(() => {
     setLoading(true);
@@ -450,11 +455,26 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
       .then(res => {
         setActivity(res.data.activity);
         setHodSignature(res.data.hodSignatureData || null);
-        setEdits(e => ({ ...e, reviewerName: res.data.activity?.reviewer_name || 'Dr. A. R. Surve', reviewerTitle: 'Head of Department' }));
+        setIsIssued(Boolean(res.data.isIssued));
+        setIssuedAt(res.data.issuedAt || null);
+        setIssuedBy(res.data.issuedBy || null);
+        setServerIsHod(Boolean(res.data.isHod));
+
+        const saved = res.data.letterData || {};
+        setEdits({
+          opening: saved.custom_opening || '',
+          body: saved.custom_body || '',
+          closing: saved.custom_closing || '',
+          reviewerName: saved.issued_by_name || res.data.activity?.reviewer_name || 'Dr. A. R. Surve',
+          reviewerTitle: saved.issued_by_title || 'Head of Department'
+        });
+        if (saved.custom_signature) {
+          setDrawnSignature(saved.custom_signature);
+        }
         setLoading(false);
       })
       .catch(err => {
-        setError(err?.response?.data?.error || 'Unable to load letter preview.');
+        setError(err?.response?.data?.error || 'Unable to load appreciation letter.');
         setLoading(false);
       });
   }, [activityId]);
@@ -477,6 +497,32 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
     setActiveTab('preview');
   };
 
+  const handleIssueLetter = async () => {
+    setIssuing(true);
+    try {
+      const overrides = {};
+      if (edits.opening) overrides.custom_opening = edits.opening;
+      if (edits.body) overrides.custom_body = edits.body;
+      if (edits.closing) overrides.custom_closing = edits.closing;
+      if (edits.reviewerName) overrides.custom_reviewer_name = edits.reviewerName;
+      if (edits.reviewerTitle) overrides.custom_reviewer_title = edits.reviewerTitle;
+
+      const res = await api.post(`/activity/${activityId}/appreciation-letter/issue`, {
+        overrides,
+        customSignature: drawnSignature || undefined
+      });
+      setIsIssued(true);
+      setIssuedAt(new Date().toISOString());
+      setActivity(res.data.activity);
+      showNotification?.('Official Appreciation Letter successfully issued and delivered to faculty member!', 'success');
+      setActiveTab('preview');
+    } catch (err) {
+      showNotification?.(err?.response?.data?.error || 'Unable to issue appreciation letter.', 'error');
+    } finally {
+      setIssuing(false);
+    }
+  };
+
   const handleDownload = async () => {
     setDownloading(true);
     try {
@@ -488,7 +534,7 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
         if (edits.reviewerName) overrides.custom_reviewer_name = edits.reviewerName;
         if (edits.reviewerTitle) overrides.custom_reviewer_title = edits.reviewerTitle;
       }
-      const hasOverrides = Object.keys(overrides).length > 0 || drawnSignature;
+      const hasOverrides = isHod && (Object.keys(overrides).length > 0 || drawnSignature);
       let response;
       if (hasOverrides) {
         response = await api.post(
@@ -510,8 +556,13 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
     }
   };
 
+  const switchTab = (id) => {
+    if (!isHod && id !== 'preview') return;
+    setActiveTab(id);
+  };
+
   const tabBtn = (id, label, badge) => (
-    <button type="button" onClick={() => setActiveTab(id)}
+    <button type="button" onClick={() => switchTab(id)}
       style={{ padding: '10px 18px', border: 'none', borderBottom: activeTab === id ? '3px solid #1a365d' : '3px solid transparent', background: 'transparent', color: activeTab === id ? '#1a365d' : '#64748b', fontWeight: activeTab === id ? 800 : 500, fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px', transition: 'color 0.15s' }}>
       {label}
       {badge && <span style={{ background: '#16a34a', color: '#fff', borderRadius: '10px', padding: '1px 7px', fontSize: '10px' }}>{badge}</span>}
@@ -529,69 +580,115 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
 
   if (error) return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.8)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '12px', padding: '32px', maxWidth: '400px', textAlign: 'center' }}>
-        <div style={{ color: '#dc2626', fontWeight: 700, marginBottom: '8px', fontSize: '16px' }}>Unable to load letter</div>
-        <div style={{ color: '#64748b', fontSize: '13px', marginBottom: '20px' }}>{error}</div>
-        <button onClick={onClose} style={{ padding: '10px 28px', background: '#1a365d', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 }}>Close</button>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: '14px', padding: '36px', maxWidth: '450px', textAlign: 'center', boxShadow: '0 24px 48px rgba(0,0,0,0.35)' }}>
+        <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔒</div>
+        <div style={{ color: '#0f172a', fontWeight: 800, marginBottom: '8px', fontSize: '17px' }}>Official Commendation Pending Issuance</div>
+        <div style={{ color: '#64748b', fontSize: '13px', marginBottom: '24px', lineHeight: 1.6 }}>{error}</div>
+        <button onClick={onClose} style={{ padding: '10px 32px', background: '#1a365d', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}>Understood</button>
       </div>
     </div>
   );
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.82)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px', backdropFilter: 'blur(4px)' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#f8fafc', borderRadius: '14px', width: '100%', maxWidth: isHod ? '1100px' : '720px', maxHeight: '96dvh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 64px rgba(0,0,0,0.45)', overflow: 'hidden' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#f8fafc', borderRadius: '14px', width: '100%', maxWidth: isHod ? '1100px' : '760px', maxHeight: '96dvh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 64px rgba(0,0,0,0.45)', overflow: 'hidden' }}>
+        
         {/* Header */}
         <div style={{ background: 'linear-gradient(135deg, #1a365d 0%, #2a4d8f 100%)', color: '#fff', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
           <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '10px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Icon name="award" size={22} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: '#90b4d8', marginBottom: '2px' }}>Official Appreciation Letter</div>
-            <div style={{ fontWeight: 800, fontSize: '15px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activityTitle || activity?.title || 'Faculty Activity'}</div>
+            <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase', color: '#90b4d8', marginBottom: '2px' }}>
+              {isHod ? 'Appreciation Letter Management' : 'Official Letter of Appreciation'}
+            </div>
+            <div style={{ fontWeight: 800, fontSize: '15px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {activityTitle || activity?.title || 'Faculty Activity'}
+            </div>
           </div>
-          {isHod && <div style={{ background: '#f59e0b', color: '#78350f', padding: '4px 10px', borderRadius: '20px', fontSize: '10px', fontWeight: 800, flexShrink: 0 }}>HOD MODE</div>}
+          {isHod ? (
+            <div style={{ background: '#f59e0b', color: '#78350f', padding: '4px 10px', borderRadius: '20px', fontSize: '10px', fontWeight: 800, flexShrink: 0 }}>
+              HOD ISSUER MODE
+            </div>
+          ) : (
+            <div style={{ background: '#16a34a', color: '#fff', padding: '4px 10px', borderRadius: '20px', fontSize: '10px', fontWeight: 800, flexShrink: 0 }}>
+              🏅 AWARDED TO YOU
+            </div>
+          )}
           <button type="button" onClick={onClose}
             style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '50%', width: '34px', height: '34px', color: '#fff', cursor: 'pointer', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, lineHeight: 1 }}>✕</button>
         </div>
 
-        {/* Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', background: '#fff', paddingLeft: '12px', flexShrink: 0, overflowX: 'auto' }}>
-          {tabBtn('preview', '👁 Preview Letter')}
-          {isHod && tabBtn('edit', '✏️ Edit Content')}
-          {isHod && tabBtn('sign', '✍️ Signature', drawnSignature ? '✓' : null)}
-        </div>
+        {/* Status bar for HOD */}
+        {isHod && (
+          <div style={{ background: isIssued ? '#f0fdf4' : '#fffbeb', borderBottom: '1px solid ' + (isIssued ? '#bbf7d0' : '#fde68a'), padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '14px' }}>{isIssued ? '✅' : '⏳'}</span>
+              <strong style={{ color: isIssued ? '#15803d' : '#b45309' }}>
+                {isIssued ? `Officially Issued & Sent to Faculty on ${fmtDate(issuedAt)}` : 'Draft Mode: Not yet issued to faculty'}
+              </strong>
+            </div>
+            <span style={{ color: '#64748b', fontSize: '11px' }}>
+              {isIssued ? 'Faculty can view & download this letter in their login' : 'Faculty cannot access this letter until you click "Issue & Send to Faculty"'}
+            </span>
+          </div>
+        )}
+
+        {/* Tabs for HOD ONLY */}
+        {isHod && (
+          <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', background: '#fff', paddingLeft: '12px', flexShrink: 0, overflowX: 'auto' }}>
+            {tabBtn('preview', '👁 Preview Letter')}
+            {tabBtn('edit', '✏️ Edit Content', (edits.opening || edits.body || edits.closing) ? '✎' : null)}
+            {tabBtn('sign', '✍️ Signature', drawnSignature ? '✓' : null)}
+          </div>
+        )}
 
         {/* Tab content */}
         <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
 
-          {/* PREVIEW TAB */}
+          {/* PREVIEW TAB (Visible to both; strictly read-only for faculty) */}
           {activeTab === 'preview' && (
-            <div style={{ padding: '20px', maxWidth: '700px', margin: '0 auto' }}>
-              {activity?.workflow_status !== 'Approved' && (
-                <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '12px', color: '#92400e', fontWeight: 600, display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  ⚠️ <span>This activity is not yet approved. The letter shown is a preview only.</span>
+            <div style={{ padding: '20px', maxWidth: '720px', margin: '0 auto' }}>
+              {!isHod && (
+                <div style={{ background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', border: '1px solid #86efac', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 2px 8px rgba(22,101,52,0.08)' }}>
+                  <span style={{ fontSize: '24px' }}>🎉</span>
+                  <div>
+                    <div style={{ fontWeight: 800, color: '#166534', fontSize: '13px' }}>Official Commendation from Head of Department</div>
+                    <div style={{ color: '#15803d', fontSize: '11.5px', marginTop: '2px' }}>
+                      Walchand College of Engineering and your Head of Department have awarded you this official Letter of Appreciation in recognition of your academic contribution.
+                    </div>
+                  </div>
                 </div>
               )}
+
+              {isHod && activity?.workflow_status !== 'Approved' && (
+                <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '12px', color: '#92400e', fontWeight: 600, display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  ⚠️ <span>This activity is currently Submitted. Clicking "Issue & Send to Faculty" below will automatically approve it and award the letter to the faculty member.</span>
+                </div>
+              )}
+
               {isHod && (edits.opening || edits.body || edits.closing) && (
                 <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '12px', color: '#1e40af', fontWeight: 600 }}>
                   ✎ Custom edits are active and reflected in this preview.
                 </div>
               )}
-              {drawnSignature && (
+
+              {isHod && drawnSignature && (
                 <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '12px', color: '#166534', fontWeight: 600, display: 'flex', gap: '10px', alignItems: 'center' }}>
                   <img src={drawnSignature} alt="Sig" style={{ height: '32px', objectFit: 'contain', background: '#fff', borderRadius: '4px', border: '1px solid #e2e8f0', padding: '2px' }} />
-                  Session signature ready — will appear in PDF
+                  Session signature ready — will appear in issued letter and PDF
                 </div>
               )}
+
               <LetterPreview act={activity} edits={edits} hodSignature={hodSignature} drawnSignature={drawnSignature} />
             </div>
           )}
 
-          {/* EDIT TAB (HOD only) */}
+          {/* EDIT TAB (HOD ONLY) */}
           {activeTab === 'edit' && isHod && (
             <div style={{ padding: '20px', maxWidth: '820px', margin: '0 auto' }}>
               <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', padding: '14px', marginBottom: '20px', fontSize: '12.5px', color: '#1e40af' }}>
-                <strong>HOD Edit Mode:</strong> Pre-filled with auto-generated content. Leave blank to use auto-generated text. Changes are reflected live in the Preview tab.
+                <strong>HOD Edit Mode:</strong> Personalize the official appreciation letter for this faculty member. Leave fields blank to keep institutional auto-generated wording. Changes will be saved and reflected in the faculty member's portal when you click <strong>"Issue & Send to Faculty"</strong>.
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {[
@@ -635,7 +732,7 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
             </div>
           )}
 
-          {/* SIGNATURE TAB (HOD only) */}
+          {/* SIGNATURE TAB (HOD ONLY) */}
           {activeTab === 'sign' && isHod && (
             <div style={{ padding: '20px', maxWidth: '680px', margin: '0 auto' }}>
               <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '14px', marginBottom: '20px', fontSize: '12.5px', color: '#166534' }}>
@@ -651,7 +748,7 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
                   <img src={drawnSignature} alt="Current signature" style={{ height: '46px', maxWidth: '160px', objectFit: 'contain', background: '#fff', padding: '4px', border: '1px solid #e2e8f0', borderRadius: '4px' }} />
                   <div>
                     <div style={{ fontWeight: 700, fontSize: '12px', color: '#15803d' }}>✅ Signature ready</div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>Will appear in the downloaded PDF</div>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>Will appear in the issued letter and PDF</div>
                     <button type="button" onClick={() => setDrawnSignature(null)}
                       style={{ marginTop: '4px', background: 'none', border: 'none', color: '#dc2626', fontSize: '11px', cursor: 'pointer', padding: 0, fontWeight: 600 }}>Remove</button>
                   </div>
@@ -668,23 +765,80 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
               style={{ padding: '9px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}>
               Close
             </button>
+            {!isHod && (
+              <span style={{ fontSize: '11.5px', color: '#166534', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <Icon name="check" size={14} /> Official Verified Document · Digitally Signed by HOD
+              </span>
+            )}
             {isHod && (
               <>
-                <button type="button" onClick={() => setActiveTab('edit')}
+                <button type="button" onClick={() => switchTab('edit')}
                   style={{ padding: '9px 18px', border: '1px solid #bfdbfe', borderRadius: '8px', background: '#eff6ff', fontSize: '13px', color: '#1e40af', cursor: 'pointer', fontWeight: 600 }}>
                   ✏️ Edit Content
                 </button>
-                <button type="button" onClick={() => setActiveTab('sign')}
+                <button type="button" onClick={() => switchTab('sign')}
                   style={{ padding: '9px 18px', border: '1px solid #bbf7d0', borderRadius: '8px', background: '#f0fdf4', fontSize: '13px', color: '#166534', cursor: 'pointer', fontWeight: 600 }}>
                   {drawnSignature ? '✍️ Update Signature' : '✍️ Add Signature'}
                 </button>
               </>
             )}
           </div>
-          <button type="button" onClick={handleDownload} disabled={downloading}
-            style={{ padding: '10px 26px', border: 'none', borderRadius: '8px', background: downloading ? '#94a3b8' : 'linear-gradient(135deg,#1a365d,#2a4d8f)', color: '#fff', fontSize: '13px', fontWeight: 800, cursor: downloading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'opacity 0.2s' }}>
-            {downloading ? '⏳ Generating PDF...' : <><Icon name="download" size={16} /> Download PDF</>}
-          </button>
+
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Primary Action for HOD: Issue & Send to Faculty */}
+            {isHod && (
+              <button
+                type="button"
+                onClick={handleIssueLetter}
+                disabled={issuing}
+                style={{
+                  padding: '10px 22px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  background: isIssued ? '#16a34a' : 'linear-gradient(135deg, #15803d 0%, #16a34a 100%)',
+                  color: '#fff',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  cursor: issuing ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 12px rgba(22,163,74,0.3)',
+                  transition: 'all 0.15s'
+                }}
+              >
+                {issuing ? '⏳ Delivering Letter...' : isIssued ? '✅ Update & Re-Send to Faculty' : '📤 Issue & Send to Faculty'}
+              </button>
+            )}
+
+            {/* Download Button */}
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={downloading}
+              style={{
+                padding: '10px 24px',
+                border: 'none',
+                borderRadius: '8px',
+                background: downloading
+                  ? '#94a3b8'
+                  : isHod
+                    ? 'linear-gradient(135deg,#1a365d,#2a4d8f)'
+                    : 'linear-gradient(135deg, #15803d 0%, #16a34a 100%)',
+                color: '#fff',
+                fontSize: '13px',
+                fontWeight: 800,
+                cursor: downloading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: isHod ? undefined : '0 4px 14px rgba(22,163,74,0.3)',
+                transition: 'opacity 0.2s'
+              }}
+            >
+              {downloading ? '⏳ Generating PDF...' : <><Icon name="download" size={16} /> {isHod ? 'Download PDF' : 'Download Official Letter (PDF)'}</>}
+            </button>
+          </div>
         </div>
       </div>
       <style>{'@keyframes spin { to { transform: rotate(360deg); } }'}</style>

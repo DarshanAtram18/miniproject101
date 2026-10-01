@@ -650,16 +650,17 @@ function buildAppreciationBody(activity) {
 // APPRECIATION LETTER PDF GENERATOR (WITH HOD APPROVAL & DIGITAL SIGNATURE)
 // ─────────────────────────────────────────────────────────────
 async function generateAppreciationLetterPdf(activity, generatedBy, customSignature = null) {
-  // Fetch HOD signature before starting the PDF stream
-  const hodSignatureBase64 = customSignature || await fetchHodSignature(activity.department)
+  const letterData = activity.details?.appreciation_letter || {}
+  // Fetch HOD signature: customSignature param -> saved letter signature -> HOD profile signature
+  const hodSignatureBase64 = customSignature || letterData.custom_signature || activity.custom_signature || await fetchHodSignature(activity.department)
 
   // Build body text — use custom overrides if HOD edited them, else auto-generate
   const autoText = buildAppreciationBody(activity)
-  const opening = activity.custom_opening || autoText.opening
-  const body = activity.custom_body || autoText.body
-  const closing = activity.custom_closing || autoText.closing
-  const reviewerName = activity.custom_reviewer_name || activity.reviewer_name || 'Dr. A. R. Surve'
-  const reviewerTitle = activity.custom_reviewer_title || 'Head of Department'
+  const opening = activity.custom_opening || letterData.custom_opening || autoText.opening
+  const body = activity.custom_body || letterData.custom_body || autoText.body
+  const closing = activity.custom_closing || letterData.custom_closing || autoText.closing
+  const reviewerName = activity.custom_reviewer_name || letterData.issued_by_name || activity.reviewer_name || 'Dr. A. R. Surve'
+  const reviewerTitle = activity.custom_reviewer_title || letterData.issued_by_title || 'Head of Department'
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
