@@ -1,0 +1,30 @@
+-- Migration 012: Add email notification infrastructure notes
+-- This migration is informational — no schema changes needed.
+-- The notifications table (010_notifications.sql) uses VARCHAR(50) for 'kind'
+-- with no CHECK constraint, so all new notification kinds are supported:
+--   'appreciation'       -- Appreciation letter issued (existing)
+--   'approved'           -- Activity approved by HOD (new)
+--   'changes_requested'  -- Changes requested by HOD (new)
+--   'submission'         -- New activity submitted, notifies HOD (new)
+--   'resubmission'       -- Faculty resubmitted after changes, notifies HOD (new)
+--
+-- ACTION REQUIRED for deployment:
+-- On the Render dashboard (https://dashboard.render.com), add these Environment Variables
+-- to the miniproject-app service:
+--
+--   SMTP_HOST  = smtp.gmail.com
+--   SMTP_PORT  = 587
+--   SMTP_SECURE = false
+--   SMTP_USER  = darshanatram18@gmail.com
+--   SMTP_PASS  = <Gmail App Password — see below>
+--   SMTP_FROM  = WCE Prof-Insights <darshanatram18@gmail.com>
+--
+-- GMAIL APP PASSWORD STEPS:
+--   1. Go to https://myaccount.google.com/security
+--   2. Enable "2-Step Verification" (required)
+--   3. Go to "App Passwords" (search for it)
+--   4. Select App: Mail, Device: Other -> name it "WCE Prof-Insights"
+--   5. Copy the 16-character password and paste as SMTP_PASS above
+--   6. Save the Render environment variables -> service will auto-redeploy
+
+SELECT 'Migration 012: Email infrastructure notes recorded' AS status;

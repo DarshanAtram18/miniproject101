@@ -166,7 +166,12 @@ const Header = ({ activeNav, navigate, logout, user, notifications, unreadCount,
                       onMouseLeave={e => e.currentTarget.style.background = notif.is_read ? '#fff' : '#f0f9ff'}
                     >
                       <div style={{ fontSize: '20px', flexShrink: 0, marginTop: '1px' }}>
-                        {notif.kind === 'appreciation' ? '🏅' : 'ℹ️'}
+                        {notif.kind === 'appreciation' ? '🏅'
+                          : notif.kind === 'approved' ? '✅'
+                          : notif.kind === 'changes_requested' ? '🔄'
+                          : notif.kind === 'submission' ? '📋'
+                          : notif.kind === 'resubmission' ? '🔁'
+                          : 'ℹ️'}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: notif.is_read ? 600 : 800, fontSize: '12.5px', color: '#1e293b', marginBottom: '2px' }}>

@@ -13,6 +13,7 @@ const {
   canAccessActivity
 } = require('../services/activityService')
 const { generateActivitySummaryPdf, generateAppreciationLetterPdf } = require('../services/reportService')
+const { sendNewSubmissionEmailToHod, sendResubmissionEmailToHod, sendAppreciationLetterEmail } = require('../services/emailService')
 
 router.use(isLoggedIn)
 
@@ -251,6 +252,38 @@ router.post('/', async (req, res) => {
     )
     await client.query('COMMIT')
 
+    // Notify HOD of new submission (non-blocking, never fails the main request)
+    if (!saveAsDraft) {
+      ;(async () => {
+        try {
+          const hodResult = await pool.query(
+            `SELECT id, name, email FROM users WHERE role = 'HOD' AND LOWER(department) = LOWER($1) AND is_active = TRUE LIMIT 1`,
+            [activity.department || '']
+          )
+          const hod = hodResult.rows[0]
+          if (hod) {
+            await pool.query(
+              `INSERT INTO notifications (user_id, kind, title, message, activity_id) VALUES ($1, $2, $3, $4, $5)`,
+              [hod.id, 'submission', 'New Activity Awaiting Your Review',
+                `${req.user.name || 'A faculty member'} submitted "${activity.title || 'an activity'}" for your review and approval.`, activityId]
+            )
+            if (hod.email) {
+              await sendNewSubmissionEmailToHod({
+                to: hod.email,
+                hodName: hod.name,
+                facultyName: req.user.name || 'Faculty',
+                activityTitle: activity.title || 'Untitled Activity',
+                activityType: activity.typeName,
+                submittedAt: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+              })
+            }
+          }
+        } catch (notifErr) {
+          console.warn('Could not notify HOD of new submission:', notifErr.message)
+        }
+      })()
+    }
+
     return res.status(201).json({ activity: await getActivityById(activityId) })
   } catch (error) {
     await client.query('ROLLBACK')
@@ -386,6 +419,36 @@ router.put('/:activityId', async (req, res) => {
       { previousVersion: existing.version }
     )
     await client.query('COMMIT')
+
+    // Notify HOD if this is a resubmission after 'Changes Requested'
+    if (!saveAsDraft && existing.workflow_status === 'Changes Requested') {
+      ;(async () => {
+        try {
+          const hodResult = await pool.query(
+            `SELECT id, name, email FROM users WHERE role = 'HOD' AND LOWER(department) = LOWER($1) AND is_active = TRUE LIMIT 1`,
+            [activity.department || existing.department || '']
+          )
+          const hod = hodResult.rows[0]
+          if (hod) {
+            await pool.query(
+              `INSERT INTO notifications (user_id, kind, title, message, activity_id) VALUES ($1, $2, $3, $4, $5)`,
+              [hod.id, 'resubmission', 'Activity Resubmitted for Review',
+                `${req.user.name || 'Faculty'} has resubmitted "${activity.title || existing.title}" after making the requested changes.`, activityId]
+            )
+            if (hod.email) {
+              await sendResubmissionEmailToHod({
+                to: hod.email,
+                hodName: hod.name,
+                facultyName: req.user.name || 'Faculty',
+                activityTitle: activity.title || existing.title
+              })
+            }
+          }
+        } catch (notifErr) {
+          console.warn('Could not send resubmission notification:', notifErr.message)
+        }
+      })()
+    }
 
     return res.json({ activity: await getActivityById(activityId) })
   } catch (error) {
@@ -731,6 +794,26 @@ router.post('/:activityId/appreciation-letter/issue', async (req, res) => {
       } catch (notifErr) {
         console.warn('Could not create appreciation notification:', notifErr.message)
         // Non-critical – do not fail the main response
+      }
+
+      // Send appreciation letter email to faculty/club member
+      try {
+        const facultyEmailResult = await pool.query('SELECT name, email FROM users WHERE id = $1', [activity.staff_id])
+        const facultyUser = facultyEmailResult.rows[0]
+        if (facultyUser?.email) {
+          const issuedDateStr = new Date().toLocaleDateString('en-IN', {
+            day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata'
+          })
+          await sendAppreciationLetterEmail({
+            to: facultyUser.email,
+            facultyName: facultyUser.name,
+            activityTitle: activity.title || 'your activity',
+            hodName: overrides.custom_reviewer_name || req.user.name || 'Dr. A. R. Surve',
+            issuedDate: issuedDateStr
+          })
+        }
+      } catch (emailErr) {
+        console.warn('Could not send appreciation letter email:', emailErr.message)
       }
 
       return res.json({

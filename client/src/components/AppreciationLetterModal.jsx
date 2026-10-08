@@ -451,11 +451,11 @@ const AppreciationLetterModal = ({ activityId, activityTitle, user, onClose, sho
   const [issuedAt, setIssuedAt] = useState(null);
   const [issuedBy, setIssuedBy] = useState(null);
   const [edits, setEdits] = useState({ opening: '', body: '', closing: '', reviewerName: '', reviewerTitle: '' });
-  const [serverIsHod, setServerIsHod] = useState(null);
-  // isHod is true ONLY if both client-side role AND server confirmed it
+  const [serverIsHod, setServerIsHod] = useState(false); // default false — never expose HOD controls to Faculty/Club
+  // isHod is true ONLY if BOTH client-side role AND server explicitly confirmed it
   // Faculty and Club roles can NEVER be isHod under any circumstance
-  const clientIsHod = ['HOD', 'Admin'].includes(user?.role);
-  const isHod = Boolean(clientIsHod && serverIsHod !== false);
+  const clientIsHod = user?.role === 'HOD' || user?.role === 'Admin';
+  const isHod = Boolean(clientIsHod && serverIsHod === true);
 
   useEffect(() => {
     setLoading(true);

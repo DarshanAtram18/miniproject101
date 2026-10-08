@@ -2,6 +2,7 @@ const router = require('express').Router()
 const pool = require('../db/pool')
 const { isLoggedIn, isReviewer } = require('../middleware/auth')
 const { listActivities, getActivityById, canAccessActivity } = require('../services/activityService')
+const { sendActivityApprovedEmail, sendChangesRequestedEmail } = require('../services/emailService')
 
 router.use(isLoggedIn, isReviewer)
 
@@ -62,14 +63,59 @@ router.patch('/activities/:activityId/review', async (req, res) => {
       [activityId, req.user.id, decision === 'Approved' ? 'Approved' : 'Requested changes', activity.workflow_status, decision, comment || null]
     )
     await client.query('COMMIT')
-    return res.json({ activity: await getActivityById(activityId) })
-  } catch (error) {
+  } catch (err) {
     await client.query('ROLLBACK')
-    console.error('Review decision error:', error)
+    console.error('Review decision error:', err)
     return res.status(500).json({ error: 'Unable to save the review decision.' })
   } finally {
     client.release()
   }
+
+  // Send in-app notification to faculty/club member
+  try {
+    const notifTitle = decision === 'Approved'
+      ? 'Your Activity Has Been Approved!'
+      : 'Changes Requested for Your Activity'
+    const notifMsg = decision === 'Approved'
+      ? `Your activity "${activity.title}" has been approved by your HOD. You can now download the approved record from your dashboard.${comment ? ' HOD note: ' + comment : ''}`
+      : `Your HOD has requested changes to "${activity.title}". Please review the feedback and resubmit. Feedback: ${comment}`
+    await pool.query(
+      `INSERT INTO notifications (user_id, kind, title, message, activity_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [activity.staff_id, decision === 'Approved' ? 'approved' : 'changes_requested', notifTitle, notifMsg, activityId]
+    )
+  } catch (notifErr) {
+    console.warn('Could not create review notification:', notifErr.message)
+  }
+
+  // Send email to faculty/club member
+  try {
+    const facultyResult = await pool.query('SELECT name, email FROM users WHERE id = $1', [activity.staff_id])
+    const faculty = facultyResult.rows[0]
+    if (faculty?.email) {
+      if (decision === 'Approved') {
+        await sendActivityApprovedEmail({
+          to: faculty.email,
+          facultyName: faculty.name,
+          activityTitle: activity.title,
+          reviewerName: req.user.name || 'HOD',
+          reviewerComment: comment || ''
+        })
+      } else {
+        await sendChangesRequestedEmail({
+          to: faculty.email,
+          facultyName: faculty.name,
+          activityTitle: activity.title,
+          reviewerName: req.user.name || 'HOD',
+          reviewerComment: comment
+        })
+      }
+    }
+  } catch (emailErr) {
+    console.warn('Could not send review email:', emailErr.message)
+  }
+
+  return res.json({ activity: await getActivityById(activityId) })
 })
 
 router.delete('/activities/:activityId', async (req, res) => {

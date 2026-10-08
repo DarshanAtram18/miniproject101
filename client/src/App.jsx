@@ -127,11 +127,11 @@ const App = () => {
     return () => { cancelled = true; };
   }, [session?.token]);
 
-  // Fetch notifications on login and poll every 60 seconds
+  // Fetch notifications on login and poll every 30 seconds for real-time updates
   useEffect(() => {
     if (!session?.token) { setNotifications([]); setUnreadCount(0); return; }
     fetchNotifications();
-    notifPollTimer.current = window.setInterval(fetchNotifications, 60_000);
+    notifPollTimer.current = window.setInterval(fetchNotifications, 30_000);
     return () => window.clearInterval(notifPollTimer.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.token]);
