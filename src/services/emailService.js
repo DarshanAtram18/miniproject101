@@ -40,28 +40,105 @@ function getEffectiveRecipient(to) {
 
 /**
  * Send an email with optional attachments.
- * If throwOnError is true, rethrows on failure so queue workers can retry.
+ * Supports:
+ *  1. Resend API (via HTTPS port 443 - works on Render Free Tier)
+ *  2. Brevo API (via HTTPS port 443 - works on Render Free Tier)
+ *  3. Standard SMTP via Nodemailer
  */
 async function sendEmail({ to, subject, html, text, attachments, throwOnError = false }) {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn('[emailService] SMTP not configured — skipping email to', to)
-    if (throwOnError) {
-      throw new Error('SMTP credentials not configured (SMTP_USER/SMTP_PASS missing)')
-    }
-    return { skipped: true }
-  }
-
   const recipient = getEffectiveRecipient(to)
   if (recipient !== to) {
     console.log(`[emailService] Routing faculty/club email (original: ${to}) -> ${recipient}`)
   }
 
+  // 1. Resend API (HTTPS port 443, unrestricted on Render)
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const payload = {
+        from: process.env.MAIL_FROM || 'WCE Prof-Insights <onboarding@resend.dev>',
+        to: [recipient],
+        subject,
+        html,
+        text,
+        attachments: attachments?.map((a) => ({
+          filename: a.filename,
+          content: Buffer.isBuffer(a.content) ? a.content.toString('base64') : a.content
+        }))
+      }
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.message || JSON.stringify(data))
+      }
+      console.log('[emailService via Resend API] Sent to', recipient, '| messageId:', data.id)
+      return { success: true, messageId: data.id, recipient }
+    } catch (err) {
+      console.error('[emailService via Resend API] Failed:', err.message)
+      if (throwOnError) throw err
+      return { success: false, error: err.message }
+    }
+  }
+
+  // 2. Brevo API (HTTPS port 443, unrestricted on Render)
+  if (process.env.BREVO_API_KEY) {
+    try {
+      const payload = {
+        sender: {
+          name: 'WCE Prof-Insights',
+          email: process.env.SMTP_USER || 'darshanatram18@gmail.com'
+        },
+        to: [{ email: recipient }],
+        subject,
+        htmlContent: html,
+        textContent: text,
+        attachment: attachments?.map((a) => ({
+          name: a.filename,
+          content: Buffer.isBuffer(a.content) ? a.content.toString('base64') : a.content
+        }))
+      }
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': process.env.BREVO_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.message || JSON.stringify(data))
+      }
+      console.log('[emailService via Brevo API] Sent to', recipient, '| messageId:', data.messageId)
+      return { success: true, messageId: data.messageId, recipient }
+    } catch (err) {
+      console.error('[emailService via Brevo API] Failed:', err.message)
+      if (throwOnError) throw err
+      return { success: false, error: err.message }
+    }
+  }
+
+  // 3. Standard SMTP via Nodemailer
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.warn('[emailService] Neither Email API nor SMTP configured — skipping email to', to)
+    if (throwOnError) {
+      throw new Error('No email provider configured (set RESEND_API_KEY, BREVO_API_KEY, or SMTP_USER/SMTP_PASS)')
+    }
+    return { skipped: true }
+  }
+
   try {
     const info = await transporter.sendMail({ from: FROM, to: recipient, subject, html, text, attachments })
-    console.log('[emailService] Email sent to', recipient, '|', subject, '| messageId:', info.messageId)
+    console.log('[emailService via SMTP] Email sent to', recipient, '|', subject, '| messageId:', info.messageId)
     return { success: true, messageId: info.messageId, recipient }
   } catch (err) {
-    console.error('[emailService] Failed to send email to', recipient, ':', err.message)
+    console.error('[emailService via SMTP] Failed to send email to', recipient, ':', err.message)
     if (throwOnError) throw err
     return { success: false, error: err.message }
   }

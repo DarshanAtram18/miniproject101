@@ -195,6 +195,9 @@ router.get('/email-queue-status', async (req, res) => {
        LIMIT 20`
     )
     return res.json({
+      activeProvider: process.env.RESEND_API_KEY ? 'Resend API (HTTPS)' : process.env.BREVO_API_KEY ? 'Brevo API (HTTPS)' : 'SMTP (Nodemailer)',
+      resendConfigured: Boolean(process.env.RESEND_API_KEY),
+      brevoConfigured: Boolean(process.env.BREVO_API_KEY),
       smtpConfigured: Boolean(process.env.SMTP_USER && process.env.SMTP_PASS),
       smtpUser: process.env.SMTP_USER || null,
       smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
