@@ -1,10 +1,17 @@
 'use strict'
+const dns = require('dns')
 const nodemailer = require('nodemailer')
+
+// Force IPv4 DNS resolution first to prevent ENETUNREACH on cloud environments like Render
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first')
+}
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: Number(process.env.SMTP_PORT || 587),
   secure: process.env.SMTP_SECURE === 'true',
+  family: 4, // Force IPv4 socket connection
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS
