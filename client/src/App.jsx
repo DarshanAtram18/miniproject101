@@ -143,8 +143,13 @@ const App = () => {
         window.location.hash = `#${view}`;
       }
       sessionStorage.setItem(ACTIVE_VIEW_KEY, view);
+    } else if (!session?.token && window.location.hash) {
+      // Clear hash if not logged in (e.g. pasted link with hash into a fresh tab)
+      try {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      } catch {}
     }
-  }, [session?.user, view]);
+  }, [session?.user, session?.token, view]);
 
   useEffect(() => {
     if (!session?.token) return undefined;

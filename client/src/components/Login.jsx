@@ -1,10 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Icon from './Icon';
 
 const Login = ({ onLogin, loading, error }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+
+  // Strictly ensure fields start completely blank without browser auto-population
+  useEffect(() => {
+    setEmail('');
+    setPassword('');
+    const t1 = setTimeout(() => { setEmail(''); setPassword(''); }, 50);
+    const t2 = setTimeout(() => { setEmail(''); setPassword(''); }, 200);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, []);
+
+  const enableTyping = () => {
+    if (!unlocked) setUnlocked(true);
+  };
 
   const submit = (event) => {
     event.preventDefault();
@@ -33,6 +50,24 @@ const Login = ({ onLogin, loading, error }) => {
 
       <section className="login-form-panel">
         <form className="login-card" onSubmit={submit} autoComplete="off" noValidate>
+          {/* Invisible decoy inputs to capture browser autofill heuristics */}
+          <input
+            type="text"
+            name="decoy_username"
+            style={{ position: 'absolute', top: '-9999px', left: '-9999px', opacity: 0, height: 0, width: 0 }}
+            tabIndex={-1}
+            aria-hidden="true"
+            autoComplete="off"
+          />
+          <input
+            type="password"
+            name="decoy_password"
+            style={{ position: 'absolute', top: '-9999px', left: '-9999px', opacity: 0, height: 0, width: 0 }}
+            tabIndex={-1}
+            aria-hidden="true"
+            autoComplete="new-password"
+          />
+
           <div className="login-card-heading">
             <span className="eyebrow">Secure portal access</span>
             <h2>Sign in to Prof-Insights</h2>
@@ -47,16 +82,20 @@ const Login = ({ onLogin, loading, error }) => {
           )}
 
           <div className="form-group">
-            <label htmlFor="login-email">Username <span className="required-mark">*</span></label>
+            <label htmlFor="login-username">Username <span className="required-mark">*</span></label>
             <input
-              id="login-email"
-              name="email"
+              id="login-username"
+              name="portal_user_identity"
               className="form-control"
               type="text"
               value={email}
+              readOnly={!unlocked}
+              onFocus={enableTyping}
+              onClick={enableTyping}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="Enter username (e.g. acm@wce, darshan@wce)"
-              autoComplete="username"
+              autoComplete="off"
+              data-lpignore="true"
               required
             />
           </div>
@@ -66,13 +105,17 @@ const Login = ({ onLogin, loading, error }) => {
             <div className="password-field">
               <input
                 id="login-password"
-                name="password"
+                name="portal_user_secret"
                 className="form-control"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
+                readOnly={!unlocked}
+                onFocus={enableTyping}
+                onClick={enableTyping}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="Enter your password"
-                autoComplete="current-password"
+                autoComplete="new-password"
+                data-lpignore="true"
                 required
               />
               <button type="button" className="password-toggle" onClick={() => setShowPassword((show) => !show)}>
