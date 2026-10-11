@@ -30,10 +30,14 @@ const insertAudit = (client, activityId, actorId, action, fromStatus, toStatus, 
 
 async function insertAttachments(client, activityId, userId, attachments) {
   for (const file of attachments) {
+    const isCert = file.kind === 'evidence' || String(file.fileName || '').toLowerCase().includes('cert')
+    const isPrimary = file.isPrimary !== undefined ? Boolean(file.isPrimary) : isCert
+    const isReportVisible = file.isReportVisible !== undefined ? Boolean(file.isReportVisible) : file.kind !== 'attendance'
+
     await client.query(
       `INSERT INTO activity_attachment
-         (activity_id, kind, file_name, mime_type, size_bytes, data, sha256, caption, sort_order, uploaded_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+         (activity_id, kind, file_name, mime_type, size_bytes, data, sha256, caption, sort_order, uploaded_by, is_primary, is_report_visible)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         activityId,
         file.kind,
@@ -44,7 +48,9 @@ async function insertAttachments(client, activityId, userId, attachments) {
         file.sha256,
         file.caption,
         file.sortOrder,
-        userId
+        userId,
+        isPrimary,
+        isReportVisible
       ]
     )
   }
@@ -541,9 +547,10 @@ router.get('/:activityId/summary-report', async (req, res) => {
       .slice(0, 80) || `activity-${activity.act_id}`
     const filename = `${safeTitle}-event-summary.pdf`
 
+    const disposition = req.query.disposition === 'inline' ? 'inline' : 'attachment'
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Length', body.length)
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.setHeader('Content-Disposition', `${disposition}; filename="${filename}"`)
     res.setHeader('Cache-Control', 'no-store')
     return res.send(body)
   } catch (error) {

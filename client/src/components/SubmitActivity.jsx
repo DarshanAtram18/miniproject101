@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import Icon from './Icon';
-import { currentAcademicYears, hasValue, humanize } from '../utils';
+import { currentAcademicYears, hasValue, humanize, normalizeHost } from '../utils';
 
 const legacyTypeAliases = {
   'Value Added Course': 'Value-Added Course',
@@ -67,7 +67,11 @@ const normaliseInitial = (record, user) => {
     officialUrl: record?.official_url || '',
     details,
     guests: record?.guests?.length ? record.guests.map((guest) => ({ ...guest })) : [],
-    existingAttachments: record?.attachments || [],
+    existingAttachments: (record?.attachments || []).map((att) => ({
+      ...att,
+      isPrimary: Boolean(att.is_primary || att.isPrimary),
+      isReportVisible: att.is_report_visible !== false && att.isReportVisible !== false
+    })),
     removeAttachmentIds: [],
     newAttachments: []
   };
@@ -216,22 +220,57 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
       } else if (kind === 'evidence' || kind === 'report') {
         filteredNew = previous.newAttachments.filter((item) => item.kind !== kind);
       }
+
+      const hasAnyPrimary = previous.existingAttachments.some((a) => a.isPrimary && !previous.removeAttachmentIds.includes(a.id)) ||
+        filteredNew.some((a) => a.isPrimary);
+
+      const mappedAccepted = accepted.map((file, index) => {
+        const isCert = kind === 'evidence' || kind === 'report' || /cert/i.test(file.name);
+        const shouldBePrimary = isCert || (!hasAnyPrimary && index === 0);
+        return {
+          key: `${file.name}-${file.lastModified}-${kind}-${index}-${Date.now()}`,
+          file,
+          kind,
+          caption: '',
+          previewUrl: URL.createObjectURL(file),
+          sortOrder: previous.newAttachments.length + index,
+          isPrimary: shouldBePrimary,
+          isReportVisible: true
+        };
+      });
+
+      const hasNewPrimary = mappedAccepted.some((a) => a.isPrimary);
+      const updatedExisting = hasNewPrimary
+        ? previous.existingAttachments.map((a) => ({ ...a, isPrimary: false }))
+        : previous.existingAttachments;
+      const updatedFilteredNew = hasNewPrimary
+        ? filteredNew.map((a) => ({ ...a, isPrimary: false }))
+        : filteredNew;
+
       return {
         ...previous,
+        existingAttachments: updatedExisting,
         newAttachments: [
-          ...filteredNew,
-          ...accepted.map((file, index) => ({
-            key: `${file.name}-${file.lastModified}-${kind}-${index}-${Date.now()}`,
-            file,
-            kind,
-            caption: '',
-            previewUrl: URL.createObjectURL(file),
-            sortOrder: previous.newAttachments.length + index
-          }))
+          ...updatedFilteredNew,
+          ...mappedAccepted
         ]
       };
     });
     setErrors((previous) => ({ ...previous, files: undefined }));
+  };
+
+  const setPrimaryAttachment = (target) => {
+    setForm((previous) => ({
+      ...previous,
+      newAttachments: previous.newAttachments.map((na) => ({
+        ...na,
+        isPrimary: target.key ? na.key === target.key : false
+      })),
+      existingAttachments: previous.existingAttachments.map((ea) => ({
+        ...ea,
+        isPrimary: target.id ? ea.id === target.id : false
+      }))
+    }));
   };
 
   const removeNewFile = (key) => {
@@ -327,18 +366,23 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
           mimeType: item.file.type || 'application/octet-stream',
           data: await fileToBase64(item.file),
           caption: item.caption || '',
-          sortOrder: item.sortOrder
+          sortOrder: item.sortOrder,
+          isPrimary: Boolean(item.isPrimary),
+          isReportVisible: item.isReportVisible !== false
         }))
       );
 
       const activeExistingAttachments = form.existingAttachments
         .filter((item) => !form.removeAttachmentIds.includes(item.id))
         .map((item, index) => ({
+          id: item.id,
           kind: item.kind,
           fileName: item.fileName,
           mimeType: item.mimeType,
           caption: item.caption,
-          sortOrder: index
+          sortOrder: index,
+          isPrimary: Boolean(item.isPrimary),
+          isReportVisible: item.isReportVisible !== false
         }));
 
       const payload = {
@@ -461,13 +505,15 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
       name: img.fileName,
       url: `/api/activity/${initialActivity?.act_id}/attachments/${img.id}?disposition=inline${tokenParam}`,
       isExisting: true,
-      id: img.id
+      id: img.id,
+      isPrimary: Boolean(img.isPrimary)
     })),
     ...newImages.map((img) => ({
       name: img.file.name,
       url: img.previewUrl,
       isExisting: false,
-      key: img.key
+      key: img.key,
+      isPrimary: Boolean(img.isPrimary)
     }))
   ];
 
@@ -658,6 +704,19 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
                         onChange={(e) => setValue('hostOrganisation', e.target.value)}
                         placeholder="Institution, publisher, agency or professional body"
                       />
+                      {Boolean(form.hostOrganisation && form.hostOrganisation.trim() && normalizeHost(form.hostOrganisation) !== form.hostOrganisation.trim()) && (
+                        <div style={{ marginTop: '4px', fontSize: '12px', color: '#14284b', background: '#eff6ff', padding: '6px 10px', borderRadius: '4px', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>Canonical suggestion:</span>
+                          <button
+                            type="button"
+                            onClick={() => setValue('hostOrganisation', normalizeHost(form.hostOrganisation))}
+                            style={{ background: 'none', border: 'none', color: '#1d4ed8', fontWeight: 700, textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+                          >
+                            {normalizeHost(form.hostOrganisation)}
+                          </button>
+                          <span style={{ fontSize: '11px', color: '#64748b' }}>(Click to apply standard institute name)</span>
+                        </div>
+                      )}
                       <FieldError message={errors.hostOrganisation} />
                     </div>
                   )}
@@ -974,9 +1033,30 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
                                 src={img.url}
                                 alt={img.name}
                                 title={img.name}
-                                style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '3px', cursor: 'pointer', display: 'block' }}
+                                style={{ width: '68px', height: '60px', objectFit: 'cover', borderRadius: '3px', cursor: 'pointer', display: 'block' }}
                                 onClick={() => { setActiveImageIndex(idx); setGalleryModalOpen(true); }}
                               />
+                              <button
+                                type="button"
+                                title={img.isPrimary ? 'Primary report photo (shown beside activity details)' : 'Click to make this the primary report photo'}
+                                onClick={() => setPrimaryAttachment(img)}
+                                style={{
+                                  display: 'block',
+                                  width: '100%',
+                                  padding: '2px 0',
+                                  fontSize: '9.5px',
+                                  fontWeight: 700,
+                                  border: 'none',
+                                  borderRadius: '2px',
+                                  marginTop: '2px',
+                                  cursor: 'pointer',
+                                  background: img.isPrimary ? '#b7791f' : '#f1f5f9',
+                                  color: img.isPrimary ? '#fff' : '#475569',
+                                  textAlign: 'center'
+                                }}
+                              >
+                                {img.isPrimary ? '★ Primary' : 'Set Primary'}
+                              </button>
                               {/* Remove button */}
                               <button
                                 type="button"

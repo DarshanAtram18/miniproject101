@@ -10,6 +10,7 @@ const publicUser = (user) => ({
   id: user.id,
   email: user.email,
   name: user.name,
+  salutation: user.salutation || 'Prof.',
   department: user.department || '',
   designation: user.designation || 'Faculty',
   role: user.role || 'Faculty'
@@ -49,6 +50,26 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', isLoggedIn, (req, res) => {
   res.json({ user: publicUser(req.user) })
+})
+
+router.patch('/profile', isLoggedIn, async (req, res) => {
+  const salutation = String(req.body.salutation || '').trim() || 'Prof.'
+  const designation = String(req.body.designation || '').trim()
+  try {
+    const result = await pool.query(
+      `UPDATE users
+       SET salutation = $1,
+           designation = CASE WHEN $2 <> '' THEN $2 ELSE designation END,
+           updated_at = NOW()
+       WHERE id = $3
+       RETURNING *`,
+      [salutation, designation, req.user.id]
+    )
+    return res.json({ user: publicUser(result.rows[0]) })
+  } catch (error) {
+    console.error('Profile update error:', error)
+    return res.status(500).json({ error: 'Unable to update profile.' })
+  }
 })
 
 router.post('/signup', isLoggedIn, isAdmin, async (req, res) => {

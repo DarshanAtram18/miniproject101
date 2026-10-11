@@ -4,6 +4,7 @@ import Icon from './Icon';
 import DetailedReportModal from './DetailedReportModal';
 import SummaryViewModal from './SummaryViewModal';
 import AppreciationLetterModal from './AppreciationLetterModal';
+import CombinedReportPreviewModal from './CombinedReportPreviewModal';
 import { currentAcademicYears } from '../utils';
 
 const Reports = ({ user, catalog, records, total, onDownload, showNotification }) => {
@@ -26,10 +27,38 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
   });
   const [downloading, setDownloading] = useState('');
   const [appreciationDownloading, setAppreciationDownloading] = useState(false);
+  const [showCombinedPreviewModal, setShowCombinedPreviewModal] = useState(false);
 
   const activityTypes = catalog.typeGroups.flatMap((group) => group.types.map((type) => type.name));
   const roles = useMemo(() => [...new Set(catalog.typeGroups.flatMap((group) => group.types.flatMap((type) => type.roles)))].sort(), [catalog]);
   const approvedVisible = records.filter((record) => record.workflow_status === 'Approved').length;
+
+  const currentPeriodLabel = useMemo(() => {
+    if (periodMode === 'academicYear') return filters.academicYear;
+    if (periodMode === 'last5Years') {
+      const five = currentAcademicYears(5);
+      return `Last 5 Years (${five[4]} to ${five[0]})`;
+    }
+    if (periodMode === 'last10Years') {
+      const ten = currentAcademicYears(10);
+      return `Last 10 Years (${ten[9]} to ${ten[0]})`;
+    }
+    if (periodMode === 'dateRange') {
+      return `${filters.from || 'Start'} to ${filters.to || 'Present'}`;
+    }
+    return 'All Records';
+  }, [periodMode, filters]);
+
+  const filteredRecords = useMemo(() => {
+    return records.filter((r) => {
+      if (filters.type && r.type_name !== filters.type) return false;
+      if (filters.role && (r.faculty_role !== filters.role && r.role !== filters.role)) return false;
+      if (filters.scope && r.scope !== filters.scope) return false;
+      if (!filters.includePending && r.workflow_status !== 'Approved') return false;
+      if (filters.mine === 'true' && r.user_id && r.user_id !== user.id) return false;
+      return true;
+    });
+  }, [records, filters, user]);
 
   const update = (name, value) => setFilters((previous) => ({ ...previous, [name]: value }));
 
@@ -239,6 +268,19 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
                   </span>
                 </div>
               )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>
+                  Matching criteria: <strong>{filteredRecords.length} activities</strong>
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setShowCombinedPreviewModal(true)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: '#14284b', borderColor: '#cbd5e1' }}
+                >
+                  <Icon name="eye" size={15} /> Preview Report On-Screen
+                </button>
+              </div>
               <div className="download-button-grid">
                 <button className="download-format-button pdf" type="button" onClick={() => download('pdf')} disabled={Boolean(downloading)}>
                   <span><Icon name="file" /></span>
@@ -422,6 +464,17 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
           user={user}
           onClose={() => setAppreciationModalRecord(null)}
           showNotification={showNotification}
+        />
+      )}
+
+      {showCombinedPreviewModal && (
+        <CombinedReportPreviewModal
+          user={user}
+          records={filteredRecords}
+          periodLabel={currentPeriodLabel}
+          onClose={() => setShowCombinedPreviewModal(false)}
+          onDownloadPdf={() => download('pdf')}
+          downloading={downloading === 'pdf'}
         />
       )}
     </div>

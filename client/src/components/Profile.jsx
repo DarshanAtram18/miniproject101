@@ -8,6 +8,12 @@ const Profile = ({ user, onChangePassword, onSignOut }) => {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Salutation state
+  const [salutation, setSalutation] = useState(user.salutation || 'Prof.');
+  const [salutationSaving, setSalutationSaving] = useState(false);
+  const [salutationMsg, setSalutationMsg] = useState('');
+  const [salutationError, setSalutationError] = useState('');
+
   // Signature state (HOD / Admin only)
   const [hasSignature, setHasSignature] = useState(false);
   const [sigLoading, setSigLoading] = useState(false);
@@ -45,6 +51,22 @@ const Profile = ({ user, onChangePassword, onSignOut }) => {
       setError(requestError.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const updateSalutation = async (e) => {
+    e.preventDefault();
+    setSalutationSaving(true);
+    setSalutationMsg('');
+    setSalutationError('');
+    try {
+      await api.patch('/auth/profile', { salutation });
+      setSalutationMsg('Salutation updated successfully. It will be used in all formal reports.');
+      if (user) user.salutation = salutation;
+    } catch (err) {
+      setSalutationError(getErrorMessage(err, 'Unable to update salutation.'));
+    } finally {
+      setSalutationSaving(false);
     }
   };
 
@@ -130,6 +152,45 @@ const Profile = ({ user, onChangePassword, onSignOut }) => {
         </section>
 
         <div className="profile-main-column">
+
+          {/* ── Academic Salutation / Title ── */}
+          <section className="form-card" aria-labelledby="salutation-title" style={{ marginBottom: '1.5rem' }}>
+            <div className="form-card-header">
+              <div>
+                <span className="section-kicker">Faculty Title</span>
+                <h2 id="salutation-title">Academic Salutation &amp; Prefix</h2>
+              </div>
+              <Icon name="award" />
+            </div>
+            <form className="form-card-body" onSubmit={updateSalutation}>
+              <p style={{ fontSize: '0.875rem', color: '#475569', marginBottom: '1rem', lineHeight: 1.5 }}>
+                Choose your official academic title (<strong>Dr.</strong>, <strong>Prof.</strong>, <strong>Mr.</strong>, <strong>Mrs.</strong>, <strong>Ms.</strong>). This prefix is automatically formatted with your name in all generated narrative sentences and official reports.
+              </p>
+              {salutationError && <div className="inline-alert error" role="alert" style={{ marginBottom: '0.75rem' }}><Icon name="alert" size={18} /><span>{salutationError}</span></div>}
+              {salutationMsg && <div className="inline-alert success" role="status" style={{ marginBottom: '0.75rem' }}><Icon name="check" size={18} /><span>{salutationMsg}</span></div>}
+              <div className="form-group" style={{ maxWidth: '280px' }}>
+                <label htmlFor="select-salutation">Official Salutation</label>
+                <select
+                  id="select-salutation"
+                  className="form-control"
+                  value={salutation}
+                  onChange={(e) => setSalutation(e.target.value)}
+                >
+                  <option value="Prof.">Prof. (Professor)</option>
+                  <option value="Dr.">Dr. (Doctor)</option>
+                  <option value="Mr.">Mr.</option>
+                  <option value="Mrs.">Mrs.</option>
+                  <option value="Ms.">Ms.</option>
+                </select>
+              </div>
+              <div className="form-inline-actions">
+                <button className="btn btn-primary" type="submit" disabled={salutationSaving}>
+                  {salutationSaving ? <span className="button-spinner" /> : <Icon name="check" size={17} />}
+                  {salutationSaving ? 'Saving…' : 'Save Title'}
+                </button>
+              </div>
+            </form>
+          </section>
 
           {/* ── HOD Digital Signature Panel ── */}
           {isReviewer && (

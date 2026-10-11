@@ -167,9 +167,10 @@ const DetailedReportModal = ({ activity, user, onClose, showNotification }) => {
               ═══════════════════════════════════════════════ */}
           <div id="detailed-report-sheet" style={{
             background: '#fff',
-            border: '2.5px solid #1a365d',
-            borderRadius: '7px',
-            padding: '18px 20px 14px',
+            border: '2.5px solid #14284b',
+            position: 'relative',
+            borderRadius: '4px',
+            padding: '24px 26px',
             maxWidth: '860px',
             margin: '0 auto',
             boxShadow: '0 4px 18px rgba(0,0,0,0.12)',
@@ -178,39 +179,54 @@ const DetailedReportModal = ({ activity, user, onClose, showNotification }) => {
             boxSizing: 'border-box',
             display: 'flex',
             flexDirection: 'column',
-            gap: '10px'
+            gap: '12px'
           }}>
+            {/* Inner Gold Border & Corner Accents */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: '5px',
+                border: '0.8px solid #b7791f',
+                pointerEvents: 'none'
+              }}
+            >
+              <div style={{ position: 'absolute', top: '-3px', left: '-3px', width: '6px', height: '6px', background: '#b7791f' }} />
+              <div style={{ position: 'absolute', top: '-3px', right: '-3px', width: '6px', height: '6px', background: '#b7791f' }} />
+              <div style={{ position: 'absolute', bottom: '-3px', left: '-3px', width: '6px', height: '6px', background: '#b7791f' }} />
+              <div style={{ position: 'absolute', bottom: '-3px', right: '-3px', width: '6px', height: '6px', background: '#b7791f' }} />
+            </div>
 
             {/* Date badges */}
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', zIndex: 1 }}>
               {[['From', startDMY], ['To', endDMY]].map(([lbl, val]) => (
-                <div key={lbl} style={{ border: '1.5px solid #1a365d', padding: '2px 14px', borderRadius: '4px', background: '#ebf4ff', fontSize: '10.5px', fontWeight: '700', color: '#1a365d' }}>
+                <div key={lbl} style={{ border: '1.2px solid #14284b', padding: '2px 14px', borderRadius: '4px', background: '#f8fafc', fontSize: '10px', fontWeight: '700', color: '#14284b' }}>
                   {lbl}: {val}
                 </div>
               ))}
             </div>
 
             {/* Institution header */}
-            <div style={{ textAlign: 'center', borderBottom: '2px double #1a365d', paddingBottom: '10px' }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px' }}>
-                <img src="/wce-logo.png" alt="WCE" style={{ width: '50px', height: '50px', objectFit: 'contain' }} />
-                <div style={{ textAlign: 'left' }}>
-                  <div style={{ fontFamily: 'Georgia, serif', color: '#1a365d', fontSize: '18px', fontWeight: 'bold', letterSpacing: '0.3px', lineHeight: 1.2 }}>
-                    WALCHAND COLLEGE OF ENGINEERING, SANGLI
-                  </div>
-                  <div style={{ fontSize: '9.5px', color: '#4a5568', textTransform: 'uppercase', letterSpacing: '1px', marginTop: '3px', fontWeight: '600' }}>
-                    Faculty Activities &amp; Contribution Portal &nbsp;|&nbsp; {activity.department || user?.department || 'Computer Science &amp; Engineering'}
-                  </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', borderBottom: '2px solid #14284b', paddingBottom: '10px', zIndex: 1 }}>
+              <img src="/wce-logo.png" alt="WCE" style={{ width: '50px', height: '50px', objectFit: 'contain' }} />
+              <div style={{ textAlign: 'left', flex: 1 }}>
+                <div style={{ fontFamily: 'Georgia, serif', color: '#14284b', fontSize: '16.5px', fontWeight: 'bold', letterSpacing: '0.3px', lineHeight: 1.2 }}>
+                  WALCHAND COLLEGE OF ENGINEERING, SANGLI
+                </div>
+                <div style={{ fontSize: '8.5px', color: '#475569', marginTop: '2px' }}>
+                  (An Autonomous Institute · Government Aided · Established 1947)
+                </div>
+                <div style={{ fontSize: '10px', color: '#b7791f', textTransform: 'uppercase', letterSpacing: '0.8px', marginTop: '2px', fontWeight: '800' }}>
+                  DEPARTMENT OF {(activity.department || user?.department || 'Computer Science and Engineering').toUpperCase()}
                 </div>
               </div>
             </div>
 
             {/* Report title */}
-            <div style={{ textAlign: 'center' }}>
-              <span style={{ fontSize: '14px', color: '#1a365d', textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: '800' }}>
-                {activity.type_name || 'FACULTY ACTIVITY'} CONTRIBUTION REPORT
+            <div style={{ textAlign: 'center', zIndex: 1 }}>
+              <span style={{ fontSize: '15px', color: '#14284b', textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: '800', fontFamily: 'Georgia, serif' }}>
+                Faculty Activity &amp; Contribution Report
               </span>
-              <div style={{ height: '3px', background: 'linear-gradient(90deg,#b7791f,#d69e2e)', borderRadius: '2px', marginTop: '5px' }} />
+              <div style={{ height: '2px', background: '#b7791f', marginTop: '4px' }} />
             </div>
 
             {/* ── GENERAL ACTIVITY DETAILS — full width ── */}
@@ -401,10 +417,23 @@ const DetailedReportModal = ({ activity, user, onClose, showNotification }) => {
               </div>
             </div>
 
+            {/* Endorsement Block — ONLY Head of Department */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px', marginBottom: '8px', zIndex: 1 }}>
+              <div style={{ textAlign: 'center', minWidth: '200px' }}>
+                <div style={{ height: '30px' }} />
+                <div style={{ borderTop: '1px solid #14284b', paddingTop: '4px' }}>
+                  <div style={{ fontSize: '10px', fontWeight: '800', color: '#14284b' }}>Head of Department</div>
+                  <div style={{ fontSize: '9px', color: '#334155' }}>(Dr. A. R. Surve)</div>
+                  <div style={{ fontSize: '7.5px', color: '#64748b' }}>Department of Computer Science &amp; Engineering</div>
+                  <div style={{ fontSize: '7.5px', color: '#64748b' }}>Walchand College of Engineering, Sangli</div>
+                </div>
+              </div>
+            </div>
+
             {/* Footer — "Generated by" */}
-            <div style={{ borderTop: '1.5px solid #e2e8f0', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ borderTop: '1.5px solid #e2e8f0', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 1 }}>
               <div style={{ fontSize: '9.5px', color: '#718096' }}>
-                Generated by <strong style={{ color: '#1a365d' }}>{facultyName}</strong> on {today} · Walchand College of Engineering, Sangli
+                Generated by <strong style={{ color: '#14284b' }}>{facultyName}</strong> on {today} · Walchand College of Engineering, Sangli
               </div>
               <div style={{ fontSize: '9.5px', color: '#718096', fontStyle: 'italic' }}>
                 Status: {activity.workflow_status || 'Submitted'}

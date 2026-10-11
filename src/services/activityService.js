@@ -36,6 +36,7 @@ const SELECT_FIELDS = `
   a.review_comment,
   a.version,
   u.name AS staff_name,
+  u.salutation AS staff_salutation,
   u.email AS staff_email,
   u.designation AS staff_designation,
   reviewer.name AS reviewer_name,
@@ -57,6 +58,8 @@ const SELECT_JOINS = `
         'sizeBytes', aa.size_bytes,
         'caption', aa.caption,
         'sortOrder', aa.sort_order,
+        'isPrimary', COALESCE(aa.is_primary, FALSE),
+        'isReportVisible', COALESCE(aa.is_report_visible, TRUE),
         'createdAt', aa.created_at
       ) ORDER BY aa.kind, aa.sort_order, aa.attachment_id
     ) AS items

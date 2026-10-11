@@ -53,8 +53,9 @@ router.get('/activity-register', async (req, res) => {
       contentType = 'application/pdf'
     }
 
+    const disposition = req.query.disposition === 'inline' ? 'inline' : 'attachment'
     res.setHeader('Content-Type', contentType)
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    res.setHeader('Content-Disposition', `${disposition}; filename="${filename}"`)
     res.setHeader('Cache-Control', 'no-store')
     return res.send(body)
   } catch (error) {
