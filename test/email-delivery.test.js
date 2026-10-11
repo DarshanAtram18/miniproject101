@@ -257,6 +257,7 @@ test('getEffectiveRecipient routes faculty/club to atram.darshan@walchandsangli.
   const { getEffectiveRecipient } = require('../src/services/emailService')
 
   // Faculty and club emails route to target test address
+  assert.equal(getEffectiveRecipient('darshan@wce'), 'atram.darshan@walchandsangli.ac.in')
   assert.equal(getEffectiveRecipient('darshan@gmail.com'), 'atram.darshan@walchandsangli.ac.in')
   assert.equal(getEffectiveRecipient('acm@wce'), 'atram.darshan@walchandsangli.ac.in')
   assert.equal(getEffectiveRecipient('sharma@wce.ac.in'), 'atram.darshan@walchandsangli.ac.in')

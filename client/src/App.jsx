@@ -289,6 +289,15 @@ const App = () => {
     }
   };
 
+  const updateUser = (updatedUser) => {
+    setSession((prev) => {
+      if (!prev) return prev;
+      const nextSession = { ...prev, user: { ...prev.user, ...updatedUser } };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
+      return nextSession;
+    });
+  };
+
   if (!session?.user || view === 'login') {
     return <Login onLogin={login} loading={loginLoading} error={loginError} />;
   }
@@ -304,7 +313,7 @@ const App = () => {
         {view === 'submit' && <SubmitActivity key={editingActivity?.act_id || 'new-activity'} user={user} catalog={catalog} initialActivity={editingActivity} onSubmit={saveActivity} onCancel={() => navigate(editingActivity ? 'records' : 'dashboard')} submitting={submitting} />}
         {view === 'records' && <Records user={user} records={records} loading={recordsLoading} error={recordsError} pagination={pagination} catalog={catalog} onReload={loadRecords} onEdit={editRecord} onDelete={deleteRecord} onReview={reviewRecord} navigate={navigate} showNotification={showNotification} />}
         {view === 'reports' && <Reports user={user} catalog={catalog} records={records} total={pagination.total} onDownload={downloadReport} showNotification={showNotification} />}
-        {view === 'profile' && <Profile user={user} onChangePassword={changePassword} onSignOut={logout} />}
+        {view === 'profile' && <Profile user={user} onUpdateUser={updateUser} onChangePassword={changePassword} onSignOut={logout} />}
       </main>
       <footer className="app-footer"><span>© 2026 Walchand College of Engineering, Sangli</span><span>WCE Prof-Insights · Faculty Activity & Evidence Portal</span></footer>
       <Notification notification={notification} onClose={() => setNotification(null)} />

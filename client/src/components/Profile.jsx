@@ -3,16 +3,25 @@ import Icon from './Icon';
 import { initials } from '../utils';
 import api, { getErrorMessage } from '../api';
 
-const Profile = ({ user, onChangePassword, onSignOut }) => {
+const Profile = ({ user, onUpdateUser, onChangePassword, onSignOut }) => {
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Salutation state
+  // Name & Profile details state
+  const [name, setName] = useState(user.name || '');
   const [salutation, setSalutation] = useState(user.salutation || 'Prof.');
-  const [salutationSaving, setSalutationSaving] = useState(false);
-  const [salutationMsg, setSalutationMsg] = useState('');
-  const [salutationError, setSalutationError] = useState('');
+  const [designation, setDesignation] = useState(user.designation || '');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMsg, setProfileMsg] = useState('');
+  const [profileError, setProfileError] = useState('');
+  const nameInputRef = useRef(null);
+
+  useEffect(() => {
+    setName(user.name || '');
+    setSalutation(user.salutation || 'Prof.');
+    setDesignation(user.designation || '');
+  }, [user.name, user.salutation, user.designation]);
 
   // Signature state (HOD / Admin only)
   const [hasSignature, setHasSignature] = useState(false);
@@ -54,19 +63,30 @@ const Profile = ({ user, onChangePassword, onSignOut }) => {
     }
   };
 
-  const updateSalutation = async (e) => {
+  const updateProfileDetails = async (e) => {
     e.preventDefault();
-    setSalutationSaving(true);
-    setSalutationMsg('');
-    setSalutationError('');
+    const trimmedName = name.trim();
+    if (!trimmedName || trimmedName.length < 2) {
+      setProfileError('Full name must contain at least 2 characters.');
+      return;
+    }
+    setProfileSaving(true);
+    setProfileMsg('');
+    setProfileError('');
     try {
-      await api.patch('/auth/profile', { salutation });
-      setSalutationMsg('Salutation updated successfully. It will be used in all formal reports.');
-      if (user) user.salutation = salutation;
+      const res = await api.patch('/auth/profile', {
+        name: trimmedName,
+        salutation,
+        designation: designation.trim()
+      });
+      setProfileMsg('Name and profile details updated successfully! Your corrected name is now active across all reports, certificates, and activity records.');
+      if (onUpdateUser && res.data?.user) {
+        onUpdateUser(res.data.user);
+      }
     } catch (err) {
-      setSalutationError(getErrorMessage(err, 'Unable to update salutation.'));
+      setProfileError(getErrorMessage(err, 'Unable to update profile.'));
     } finally {
-      setSalutationSaving(false);
+      setProfileSaving(false);
     }
   };
 
@@ -138,8 +158,22 @@ const Profile = ({ user, onChangePassword, onSignOut }) => {
           <div className="profile-cover" />
           <div className="profile-summary-content">
             <span className="profile-large-avatar">{initials(user.name)}</span>
-            <h2>{user.name}</h2>
-            <p>{user.designation || 'Faculty'} · {user.department}</p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+              <h2 style={{ margin: 0 }}>{user.name}</h2>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ padding: '0.15rem 0.45rem', fontSize: '0.75rem', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: '#1E3A8A' }}
+                onClick={() => {
+                  nameInputRef.current?.focus();
+                  nameInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+                title="Edit name and surname"
+              >
+                <Icon name="edit" size={13} /> Edit
+              </button>
+            </div>
+            <p>{user.designation || (user.role === 'Club' ? 'Club Coordinator' : 'Faculty')} · {user.department}</p>
             <span className={`role-badge role-${(user.role || '').toLowerCase()}`}>{user.role}</span>
             <dl>
               <div><dt>{user.role === 'Club' ? 'Account email' : 'Faculty email'}</dt><dd>{user.email}</dd></div>
@@ -147,46 +181,95 @@ const Profile = ({ user, onChangePassword, onSignOut }) => {
               <div><dt>Designation</dt><dd>{user.designation || (user.role === 'Club' ? 'Club Coordinator' : 'Faculty')}</dd></div>
               <div><dt>Portal role</dt><dd>{user.role}</dd></div>
             </dl>
-            <div className="inline-alert info"><Icon name="lock" size={18} /><p>Identity and department fields are centrally managed to prevent spelling variations in institutional reports.</p></div>
+            <div className="inline-alert info">
+              <Icon name="info" size={18} />
+              <p>Department and portal role are managed by administrator. You can edit your full name, surname, title, and password anytime.</p>
+            </div>
           </div>
         </section>
 
         <div className="profile-main-column">
 
-          {/* ── Academic Salutation / Title ── */}
-          <section className="form-card" aria-labelledby="salutation-title" style={{ marginBottom: '1.5rem' }}>
+          {/* ── Personal Identity & Name Correction Form ── */}
+          <section className="form-card" aria-labelledby="profile-info-title" style={{ marginBottom: '1.5rem' }}>
             <div className="form-card-header">
               <div>
-                <span className="section-kicker">Faculty Title</span>
-                <h2 id="salutation-title">Academic Salutation &amp; Prefix</h2>
+                <span className="section-kicker">Personal Identity</span>
+                <h2 id="profile-info-title">{user.role === 'Club' ? 'Club & Coordinator Details' : 'Full Name & Academic Salutation'}</h2>
               </div>
-              <Icon name="award" />
+              <Icon name="edit" />
             </div>
-            <form className="form-card-body" onSubmit={updateSalutation}>
+            <form className="form-card-body" onSubmit={updateProfileDetails}>
               <p style={{ fontSize: '0.875rem', color: '#475569', marginBottom: '1rem', lineHeight: 1.5 }}>
-                Choose your official academic title (<strong>Dr.</strong>, <strong>Prof.</strong>, <strong>Mr.</strong>, <strong>Mrs.</strong>, <strong>Ms.</strong>). This prefix is automatically formatted with your name in all generated narrative sentences and official reports.
+                {user.role === 'Club'
+                  ? 'Update your official club or student chapter display name. This name is used across all event records and activity summaries.'
+                  : 'Update your official full name (First Name, Surname) or academic prefix. If your surname or spelling was entered incorrectly, correct it here to reflect accurately across all reports, registers, and certificates.'}
               </p>
-              {salutationError && <div className="inline-alert error" role="alert" style={{ marginBottom: '0.75rem' }}><Icon name="alert" size={18} /><span>{salutationError}</span></div>}
-              {salutationMsg && <div className="inline-alert success" role="status" style={{ marginBottom: '0.75rem' }}><Icon name="check" size={18} /><span>{salutationMsg}</span></div>}
-              <div className="form-group" style={{ maxWidth: '280px' }}>
-                <label htmlFor="select-salutation">Official Salutation</label>
-                <select
-                  id="select-salutation"
-                  className="form-control"
-                  value={salutation}
-                  onChange={(e) => setSalutation(e.target.value)}
-                >
-                  <option value="Prof.">Prof. (Professor)</option>
-                  <option value="Dr.">Dr. (Doctor)</option>
-                  <option value="Mr.">Mr.</option>
-                  <option value="Mrs.">Mrs.</option>
-                  <option value="Ms.">Ms.</option>
-                </select>
+
+              {profileError && <div className="inline-alert error" role="alert" style={{ marginBottom: '0.75rem' }}><Icon name="alert" size={18} /><span>{profileError}</span></div>}
+              {profileMsg && <div className="inline-alert success" role="status" style={{ marginBottom: '0.75rem' }}><Icon name="check" size={18} /><span>{profileMsg}</span></div>}
+
+              <div className="form-grid two-columns" style={{ gap: '1rem', alignItems: 'flex-start' }}>
+                {user.role !== 'Club' && (
+                  <div className="form-group" style={{ maxWidth: '240px' }}>
+                    <label htmlFor="select-salutation">Official Salutation</label>
+                    <select
+                      id="select-salutation"
+                      className="form-control"
+                      value={salutation}
+                      onChange={(e) => setSalutation(e.target.value)}
+                    >
+                      <option value="Prof.">Prof. (Professor)</option>
+                      <option value="Dr.">Dr. (Doctor)</option>
+                      <option value="Mr.">Mr.</option>
+                      <option value="Mrs.">Mrs.</option>
+                      <option value="Ms.">Ms.</option>
+                    </select>
+                    <span className="helper-text">Prefix used in all reports.</span>
+                  </div>
+                )}
+
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label htmlFor="input-full-name">
+                    {user.role === 'Club' ? 'Club / Chapter Name' : 'Full Name (First Name & Surname)'} <span className="required-mark">*</span>
+                  </label>
+                  <input
+                    id="input-full-name"
+                    ref={nameInputRef}
+                    type="text"
+                    className="form-control"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={user.role === 'Club' ? 'e.g. ACM Student Chapter' : 'e.g. Abhay Kulkarni'}
+                    required
+                  />
+                  <span className="helper-text">
+                    {user.role === 'Club'
+                      ? 'Official organization name formatted in summaries.'
+                      : 'Your official full name formatted across all institutional reports.'}
+                  </span>
+                </div>
               </div>
-              <div className="form-inline-actions">
-                <button className="btn btn-primary" type="submit" disabled={salutationSaving}>
-                  {salutationSaving ? <span className="button-spinner" /> : <Icon name="check" size={17} />}
-                  {salutationSaving ? 'Saving…' : 'Save Title'}
+
+              {user.role !== 'Club' && (
+                <div className="form-group" style={{ marginTop: '0.75rem', maxWidth: '380px' }}>
+                  <label htmlFor="input-designation">Academic Designation</label>
+                  <input
+                    id="input-designation"
+                    type="text"
+                    className="form-control"
+                    value={designation}
+                    onChange={(e) => setDesignation(e.target.value)}
+                    placeholder="e.g. Assistant Professor, Associate Professor"
+                  />
+                  <span className="helper-text">Current academic designation.</span>
+                </div>
+              )}
+
+              <div className="form-inline-actions" style={{ marginTop: '1.25rem' }}>
+                <button className="btn btn-primary" type="submit" disabled={profileSaving}>
+                  {profileSaving ? <span className="button-spinner" /> : <Icon name="check" size={17} />}
+                  {profileSaving ? 'Saving…' : 'Save Name & Details'}
                 </button>
               </div>
             </form>

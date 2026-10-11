@@ -28,7 +28,14 @@ router.post('/login', async (req, res) => {
   }
 
   try {
-    const result = await pool.query('SELECT * FROM users WHERE LOWER(email) = $1', [email])
+    const result = await pool.query(
+      `SELECT * FROM users
+       WHERE LOWER(email) = $1
+          OR (LOWER(email) = 'darshan@wce' AND $1 = 'darshan@gmail.com')
+          OR (LOWER(email) = 'darshan@gmail.com' AND $1 = 'darshan@wce')
+       LIMIT 1`,
+      [email]
+    )
     const user = result.rows[0]
 
     if (!user || !user.is_active || !(await bcrypt.compare(password, user.password))) {
@@ -53,18 +60,28 @@ router.get('/me', isLoggedIn, (req, res) => {
 })
 
 router.patch('/profile', isLoggedIn, async (req, res) => {
-  const salutation = String(req.body.salutation || '').trim() || 'Prof.'
-  const designation = String(req.body.designation || '').trim()
+  const name = req.body.name !== undefined ? String(req.body.name).trim() : null
+  const salutation = req.body.salutation !== undefined ? String(req.body.salutation).trim() : null
+  const designation = req.body.designation !== undefined ? String(req.body.designation).trim() : null
+
+  if (name !== null && name.length < 2) {
+    return res.status(400).json({ error: 'Full name must contain at least 2 characters.' })
+  }
+
   try {
     const result = await pool.query(
       `UPDATE users
-       SET salutation = $1,
-           designation = CASE WHEN $2 <> '' THEN $2 ELSE designation END,
+       SET name = COALESCE(NULLIF($1, ''), name),
+           salutation = COALESCE(NULLIF($2, ''), salutation),
+           designation = COALESCE(NULLIF($3, ''), designation),
            updated_at = NOW()
-       WHERE id = $3
+       WHERE id = $4
        RETURNING *`,
-      [salutation, designation, req.user.id]
+      [name, salutation, designation, req.user.id]
     )
+    if (!result.rows.length) {
+      return res.status(404).json({ error: 'User account not found.' })
+    }
     return res.json({ user: publicUser(result.rows[0]) })
   } catch (error) {
     console.error('Profile update error:', error)

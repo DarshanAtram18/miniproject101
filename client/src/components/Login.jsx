@@ -55,7 +55,7 @@ const Login = ({ onLogin, loading, error }) => {
               type="text"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="Enter username (e.g. acm@wce, darshan@gmail.com)"
+              placeholder="Enter username (e.g. acm@wce, darshan@wce)"
               autoComplete="username"
               required
             />
