@@ -14,6 +14,8 @@ const {
 } = require('../services/activityService')
 const { generateActivitySummaryPdf, generateAppreciationLetterPdf } = require('../services/reportService')
 const { sendNewSubmissionEmailToHod, sendResubmissionEmailToHod, sendAppreciationLetterEmail } = require('../services/emailService')
+const { enqueueAppreciationEmail } = require('../services/emailQueueService')
+const { processNextJob } = require('../services/emailWorker')
 
 router.use(isLoggedIn)
 
@@ -780,6 +782,19 @@ router.post('/:activityId/appreciation-letter/issue', async (req, res) => {
         'Official Appreciation Letter issued and delivered to faculty member by HOD.'
       )
 
+      // Enqueue automatic email job in PostgreSQL (same transaction as approval & signed letter)
+      const facultyResult = await client.query('SELECT name, email FROM users WHERE id = $1', [activity.staff_id])
+      const facultyUser = facultyResult.rows[0]
+      if (facultyUser?.email) {
+        await enqueueAppreciationEmail(client, {
+          activityId,
+          userId: activity.staff_id,
+          recipientEmail: facultyUser.email,
+          version: (activity.version || 0) + 1,
+          pdfReference: `/api/activity/${activityId}/appreciation-letter`
+        })
+      }
+
       await client.query('COMMIT')
       const updatedActivity = await getActivityById(activityId)
 
@@ -796,25 +811,12 @@ router.post('/:activityId/appreciation-letter/issue', async (req, res) => {
         // Non-critical – do not fail the main response
       }
 
-      // Send appreciation letter email to faculty/club member
-      try {
-        const facultyEmailResult = await pool.query('SELECT name, email FROM users WHERE id = $1', [activity.staff_id])
-        const facultyUser = facultyEmailResult.rows[0]
-        if (facultyUser?.email) {
-          const issuedDateStr = new Date().toLocaleDateString('en-IN', {
-            day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata'
-          })
-          await sendAppreciationLetterEmail({
-            to: facultyUser.email,
-            facultyName: facultyUser.name,
-            activityTitle: activity.title || 'your activity',
-            hodName: overrides.custom_reviewer_name || req.user.name || 'Dr. A. R. Surve',
-            issuedDate: issuedDateStr
-          })
-        }
-      } catch (emailErr) {
-        console.warn('Could not send appreciation letter email:', emailErr.message)
-      }
+      // Asynchronously trigger email worker so email with signed PDF attachment is processed promptly
+      setImmediate(() => {
+        processNextJob().catch((workerErr) => {
+          console.warn('[emailWorker] Asynchronous dispatch warning:', workerErr.message)
+        })
+      })
 
       return res.json({
         success: true,

@@ -11,22 +11,28 @@ const transporter = nodemailer.createTransport({
   }
 })
 
-const FROM = process.env.SMTP_FROM || `"WCE Prof-Insights" <${process.env.SMTP_USER}>`
+const FROM = process.env.MAIL_FROM || process.env.SMTP_FROM || `"WCE Prof-Insights" <${process.env.SMTP_USER}>`
 
 /**
- * Send an HTML email. Silently logs errors — never throws, so it never
- * breaks the main request flow.
+ * Send an email with optional attachments.
+ * If throwOnError is true, rethrows on failure so queue workers can retry.
  */
-async function sendEmail({ to, subject, html, text }) {
+async function sendEmail({ to, subject, html, text, attachments, throwOnError = false }) {
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
     console.warn('[emailService] SMTP not configured — skipping email to', to)
-    return
+    if (throwOnError) {
+      throw new Error('SMTP credentials not configured (SMTP_USER/SMTP_PASS missing)')
+    }
+    return { skipped: true }
   }
   try {
-    await transporter.sendMail({ from: FROM, to, subject, html, text })
-    console.log('[emailService] Email sent to', to, '|', subject)
+    const info = await transporter.sendMail({ from: FROM, to, subject, html, text, attachments })
+    console.log('[emailService] Email sent to', to, '|', subject, '| messageId:', info.messageId)
+    return { success: true, messageId: info.messageId }
   } catch (err) {
     console.error('[emailService] Failed to send email to', to, ':', err.message)
+    if (throwOnError) throw err
+    return { success: false, error: err.message }
   }
 }
 

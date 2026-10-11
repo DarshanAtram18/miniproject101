@@ -6,10 +6,11 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "migrate": "node src/db/migrate.js",
+    "email-worker": "node scripts/email-worker.js",
     "bootstrap-admin": "node scripts/bootstrap-admin.js",
     "build": "npm --prefix client install --include=dev && npm --prefix client run build",
     "render-build": "npm install --include=dev && npm --prefix client install --include=dev && npm --prefix client run build",
-    "test": "node --test test/activity-domain.test.js test/report-service.test.js",
+    "test": "node --test test/activity-domain.test.js test/report-service.test.js test/email-delivery.test.js",
     "check": "npm test && npm --prefix client run lint && npm --prefix client run build"
   },
   "dependencies": {

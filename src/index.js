@@ -120,14 +120,24 @@ app.use((error, req, res, next) => {
   return res.status(500).json({ error: 'Unexpected server error.' })
 })
 
+const { startEmailWorker, stopEmailWorker } = require('./services/emailWorker')
+
 const server = app.listen(port, () => {
   console.log(`WCE Prof-Insights running on port ${port}`)
   if (!process.env.JWT_SECRET) console.warn('WARNING: JWT_SECRET is not configured.')
+  if (process.env.DISABLE_EMAIL_WORKER !== 'true') {
+    startEmailWorker({ intervalMs: Number(process.env.EMAIL_WORKER_POLL_INTERVAL_MS || 5000) })
+  }
 })
 
 const shutdown = (signal) => {
   console.log(`${signal} received; closing server.`)
   server.close(async () => {
+    try {
+      await stopEmailWorker()
+    } catch (err) {
+      console.warn('Error stopping email worker during shutdown:', err.message)
+    }
     await pool.end()
     process.exit(0)
   })
