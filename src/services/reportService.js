@@ -614,9 +614,10 @@ function drawWatermark(doc) {
 // ─────────────────────────────────────────────────────────────
 // MULTI-EVENT COMBINED / ANNUAL PDF REPORT GENERATOR
 // ─────────────────────────────────────────────────────────────
-async function generatePdf(records, metadata) {
+async function generatePdf(records, metadata = {}) {
   await attachMediaToRecords(records)
-  const hodSignatureBase64 = await fetchHodSignature(metadata.department || 'Computer Science and Engineering')
+  const dept = (metadata && metadata.department) ? metadata.department : 'Computer Science and Engineering'
+  const hodSignatureBase64 = await fetchHodSignature(dept)
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -624,7 +625,7 @@ async function generatePdf(records, metadata) {
       margin: 0,
       bufferPages: true,
       info: {
-        Title: metadata.title || 'Faculty Activity & Contribution Report',
+        Title: (metadata && metadata.title) || 'Faculty Activity & Contribution Report',
         Author: 'Walchand College of Engineering, Sangli',
         Subject: 'Faculty Activity & Contribution Report'
       }
@@ -648,11 +649,16 @@ async function generatePdf(records, metadata) {
       const typeColor = getTypeColor(record.type_name)
       const narrative = buildActivityNarrative(record)
 
+      const cardX = 36
+      const cardW = 523
+      const detailsX = cardX + 36
+      const detailsW = 310
+      const mediaX = cardX + 356
+      const mediaW = 156
+
       // Measure narrative height
-      const textH = doc.heightOfString(narrative.fullText, { width: 300, font: 'Helvetica', size: 8.5, lineGap: 1.8 })
-      const detailsH = 20 + textH + 8 + 36 + 16
-      const mediaH = 105
-      const cardH = Math.max(detailsH, mediaH, 125)
+      const textH = doc.heightOfString(narrative.fullText, { width: detailsW, font: 'Helvetica', size: 8.5, lineGap: 2.2 })
+      const cardH = Math.max(28 + textH + 14 + 44, 134)
 
       // Page break check (must leave space for border and running footer, limit = 770)
       if (currentY + cardH > 770) {
@@ -661,8 +667,6 @@ async function generatePdf(records, metadata) {
         currentY = 38
       }
 
-      const cardX = 36
-      const cardW = 523
       const cardY = currentY
 
       // Card outer frame
@@ -677,10 +681,6 @@ async function generatePdf(records, metadata) {
         .text(String(index + 1).padStart(2, '0'), circleX - 10, circleY - 4.5, { width: 20, align: 'center' })
 
       // Top row in Details Column: Pill Chip | Date | Approved tick
-      const detailsX = cardX + 36
-      const detailsW = 310
-      const mediaX = cardX + 356
-      const mediaW = 156
 
       const chipText = (record.type_name || 'ACTIVITY').toUpperCase()
       const chipW = Math.min(130, chipText.length * 5.8 + 12)
@@ -697,8 +697,8 @@ async function generatePdf(records, metadata) {
           .text('✓ Approved by HOD', detailsX, cardY + 11, { width: detailsW, align: 'right' })
       }
 
-      // Narrative text
-      let textY = cardY + 28
+      // Narrative text — only pass coordinates to the 1st token to avoid cursor-reset collision
+      const textY = cardY + 28
       doc.fontSize(8.5)
       narrative.tokens.forEach((tok, tokIdx) => {
         const isLast = tokIdx === narrative.tokens.length - 1
@@ -707,11 +707,18 @@ async function generatePdf(records, metadata) {
         } else {
           doc.fillColor('#1E293B').font('Helvetica')
         }
-        doc.text(tok.text, detailsX, textY, {
-          width: detailsW,
-          lineGap: 1.8,
-          continued: !isLast
-        })
+        if (tokIdx === 0) {
+          doc.text(tok.text, detailsX, textY, {
+            width: detailsW,
+            lineGap: 2.2,
+            continued: !isLast
+          })
+        } else {
+          doc.text(tok.text, {
+            lineGap: 2.2,
+            continued: !isLast
+          })
+        }
       })
 
       // Detail grid (2x2)
@@ -825,17 +832,19 @@ async function generateActivitySummaryPdf(activity, generatedBy) {
     drawPage1Header(doc, metadata)
     let currentY = drawStatStrip(doc, records, 126)
 
-    const typeColor = getTypeColor(activity.type_name)
-    const narrative = buildActivityNarrative(activity)
-
-    const textH = doc.heightOfString(narrative.fullText, { width: 300, font: 'Helvetica', size: 8.5, lineGap: 1.8 })
-    const detailsH = 20 + textH + 8 + 36 + 16
-    const mediaH = 125
-    const cardH = Math.max(detailsH, mediaH, 140)
-
     const cardX = 36
     const cardW = 523
     const cardY = currentY
+    const detailsX = cardX + 36
+    const detailsW = 310
+    const mediaX = cardX + 356
+    const mediaW = 156
+
+    const typeColor = getTypeColor(activity.type_name)
+    const narrative = buildActivityNarrative(activity)
+
+    const textH = doc.heightOfString(narrative.fullText, { width: detailsW, font: 'Helvetica', size: 8.5, lineGap: 2.2 })
+    const cardH = Math.max(28 + textH + 14 + 44, 140)
 
     // Card outer frame
     doc.roundedRect(cardX, cardY, cardW, cardH, 4).strokeColor('#E2E8F0').lineWidth(0.8).stroke()
@@ -846,11 +855,6 @@ async function generateActivitySummaryPdf(activity, generatedBy) {
     doc.circle(circleX, circleY, 10).fill(typeColor)
     doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8)
       .text('01', circleX - 10, circleY - 4.5, { width: 20, align: 'center' })
-
-    const detailsX = cardX + 36
-    const detailsW = 310
-    const mediaX = cardX + 356
-    const mediaW = 156
 
     const chipText = (activity.type_name || 'ACTIVITY').toUpperCase()
     const chipW = Math.min(130, chipText.length * 5.8 + 12)
@@ -867,8 +871,8 @@ async function generateActivitySummaryPdf(activity, generatedBy) {
         .text('✓ Approved by HOD', detailsX, cardY + 11, { width: detailsW, align: 'right' })
     }
 
-    // Narrative text
-    let textY = cardY + 28
+    // Narrative text — only pass coordinates to the 1st token to avoid cursor-reset collision
+    const textY = cardY + 28
     doc.fontSize(8.5)
     narrative.tokens.forEach((tok, tokIdx) => {
       const isLast = tokIdx === narrative.tokens.length - 1
@@ -877,11 +881,18 @@ async function generateActivitySummaryPdf(activity, generatedBy) {
       } else {
         doc.fillColor('#1E293B').font('Helvetica')
       }
-      doc.text(tok.text, detailsX, textY, {
-        width: detailsW,
-        lineGap: 1.8,
-        continued: !isLast
-      })
+      if (tokIdx === 0) {
+        doc.text(tok.text, detailsX, textY, {
+          width: detailsW,
+          lineGap: 2.2,
+          continued: !isLast
+        })
+      } else {
+        doc.text(tok.text, {
+          lineGap: 2.2,
+          continued: !isLast
+        })
+      }
     })
 
     // Detail grid (2x2)
@@ -965,101 +976,207 @@ async function generateDocx(records, metadata) {
 
   const docChildren = []
 
-  // Document Heading & Crest
+  // Top Institute Header (Two-column layout matching PDF)
+  const headerCells = []
   if (crestPath) {
     try {
       const crestBuffer = fs.readFileSync(crestPath)
-      docChildren.push(
-        new Paragraph({
+      headerCells.push(
+        new TableCell({
+          width: { size: 1000, type: WidthType.DXA },
+          borders: {
+            top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }
+          },
           children: [
-            new ImageRun({
-              data: crestBuffer,
-              transformation: { width: 48, height: 48 }
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new ImageRun({
+                  data: crestBuffer,
+                  transformation: { width: 52, height: 52 }
+                })
+              ]
             })
-          ],
-          alignment: AlignmentType.CENTER
+          ]
         })
       )
     } catch {}
   }
 
+  const textCellWidth = headerCells.length > 0 ? 8500 : 9500
+  headerCells.push(
+    new TableCell({
+      width: { size: textCellWidth, type: WidthType.DXA },
+      borders: {
+        top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+        right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' }
+      },
+      children: [
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: 'WALCHAND COLLEGE OF ENGINEERING, SANGLI',
+              bold: true,
+              size: 26,
+              color: BRAND_NAVY,
+              font: 'Georgia'
+            })
+          ]
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: '(An Autonomous Institute · Government Aided · Established 1947)',
+              italics: true,
+              size: 16,
+              color: '475569'
+            })
+          ]
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `DEPARTMENT OF ${(metadata.department || 'COMPUTER SCIENCE AND ENGINEERING').toUpperCase()}`,
+              bold: true,
+              size: 19,
+              color: BRAND_GOLD
+            })
+          ]
+        })
+      ]
+    })
+  )
+
+  const istDateStr = metadata.generatedAt.toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  })
+  const istTimeStr = metadata.generatedAt.toLocaleTimeString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  }).toLowerCase()
+
   docChildren.push(
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [
-        new TextRun({
-          text: 'WALCHAND COLLEGE OF ENGINEERING, SANGLI',
-          bold: true,
-          size: 26,
-          color: BRAND_NAVY
-        })
-      ]
+    new Table({
+      rows: [new TableRow({ children: headerCells })],
+      width: { size: 9500, type: WidthType.DXA }
     }),
     new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [
-        new TextRun({
-          text: '(An Autonomous Institute · Government Aided · Established 1947)',
-          size: 18,
-          color: '475569'
-        })
-      ]
+      spacing: { before: 80, after: 100 },
+      border: {
+        bottom: { style: BorderStyle.SINGLE, size: 12, color: BRAND_NAVY }
+      }
     }),
     new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [
-        new TextRun({
-          text: `DEPARTMENT OF ${(metadata.department || 'COMPUTER SCIENCE AND ENGINEERING').toUpperCase()}`,
-          bold: true,
-          size: 20,
-          color: BRAND_GOLD
-        })
-      ]
-    }),
-    new Paragraph({
-      spacing: { after: 120 },
       alignment: AlignmentType.CENTER,
       children: [
         new TextRun({
           text: 'Faculty Activity & Contribution Report',
           bold: true,
           size: 28,
-          color: BRAND_NAVY
+          color: BRAND_NAVY,
+          font: 'Georgia'
         })
       ]
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
+      spacing: { before: 40, after: 140 },
       children: [
         new TextRun({
-          text: `${metadata.coverageValue || metadata.department} · Period: ${metadata.period} · Ref: ${metadata.refNumber || 'WCE/CSE/RPT/2026-27/0007'}`,
-          size: 18,
+          text: `${metadata.coverageValue || metadata.department} · Period: ${metadata.period} · Generated ${istDateStr}, ${istTimeStr} IST · Ref: ${metadata.refNumber || 'WCE/CSE/RPT/2026-27/0007'}`,
+          size: 16,
           color: '64748B'
-        })
-      ]
-    }),
-    new Paragraph({
-      spacing: { after: 180 },
-      alignment: AlignmentType.CENTER,
-      children: [
-        new TextRun({
-          text: `Total Activities: ${records.length}  |  Approved: ${summary.byStatus.find(s => s[0] === 'Approved')?.[1] || 0}  |  Generated on: ${metadata.generatedAt.toLocaleDateString('en-IN')}`,
-          size: 18,
-          color: '1E293B',
-          bold: true
         })
       ]
     })
   )
 
-  // Ma'am's Table layout: [Sr. No | Event Details | Photo]
+  // 4-Card Stat Strip in DOCX
+  const totalActs = records.length
+  const approvedCount = records.filter(r => r.workflow_status === 'Approved').length
+  const withCertsCount = records.filter(r => (r.attachments || []).some(a => a.mimeType?.startsWith('image/') || a.kind === 'image' || a.kind === 'evidence') || r.reportMedia?.hasMedia).length
+  const typesCount = new Set(records.map(r => r.type_name).filter(Boolean)).size
+
+  const statCellWidth = 2375
+  const statBoxBorder = {
+    top: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' },
+    bottom: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' },
+    left: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' },
+    right: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' }
+  }
+
+  const statTable = new Table({
+    width: { size: 9500, type: WidthType.DXA },
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: statCellWidth, type: WidthType.DXA },
+            shading: { fill: 'F8FAFC' },
+            borders: statBoxBorder,
+            children: [
+              new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(totalActs), bold: true, size: 28, color: BRAND_NAVY })] }),
+              new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'ACTIVITIES', bold: true, size: 14, color: '64748B' })] })
+            ]
+          }),
+          new TableCell({
+            width: { size: statCellWidth, type: WidthType.DXA },
+            shading: { fill: 'F8FAFC' },
+            borders: statBoxBorder,
+            children: [
+              new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(approvedCount), bold: true, size: 28, color: '15803D' })] }),
+              new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'APPROVED', bold: true, size: 14, color: '64748B' })] })
+            ]
+          }),
+          new TableCell({
+            width: { size: statCellWidth, type: WidthType.DXA },
+            shading: { fill: 'F8FAFC' },
+            borders: statBoxBorder,
+            children: [
+              new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(withCertsCount), bold: true, size: 28, color: '1D4ED8' })] }),
+              new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'WITH CERTIFICATES', bold: true, size: 14, color: '64748B' })] })
+            ]
+          }),
+          new TableCell({
+            width: { size: statCellWidth, type: WidthType.DXA },
+            shading: { fill: 'F8FAFC' },
+            borders: statBoxBorder,
+            children: [
+              new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(typesCount), bold: true, size: 28, color: '7E22CE' })] }),
+              new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'ACTIVITY TYPES', bold: true, size: 14, color: '64748B' })] })
+            ]
+          })
+        ]
+      })
+    ]
+  })
+
+  docChildren.push(statTable, new Paragraph({ spacing: { before: 160 } }))
+
+  // Activity Cards Table: [Sr. No | Event Details | Photo]
   const tableRows = [
     new TableRow({
       tableHeader: true,
       children: [
         new TableCell({
-          width: { size: 900, type: WidthType.DXA },
+          width: { size: 850, type: WidthType.DXA },
           shading: { fill: BRAND_NAVY },
+          borders: {
+            top: { style: BorderStyle.SINGLE, size: 4, color: BRAND_NAVY },
+            bottom: { style: BorderStyle.SINGLE, size: 4, color: BRAND_NAVY },
+            left: { style: BorderStyle.SINGLE, size: 4, color: BRAND_NAVY },
+            right: { style: BorderStyle.SINGLE, size: 4, color: BRAND_NAVY }
+          },
           children: [
             new Paragraph({
               alignment: AlignmentType.CENTER,
@@ -1068,22 +1185,34 @@ async function generateDocx(records, metadata) {
           ]
         }),
         new TableCell({
-          width: { size: 5800, type: WidthType.DXA },
+          width: { size: 5850, type: WidthType.DXA },
           shading: { fill: BRAND_NAVY },
+          borders: {
+            top: { style: BorderStyle.SINGLE, size: 4, color: BRAND_NAVY },
+            bottom: { style: BorderStyle.SINGLE, size: 4, color: BRAND_NAVY },
+            left: { style: BorderStyle.SINGLE, size: 4, color: BRAND_NAVY },
+            right: { style: BorderStyle.SINGLE, size: 4, color: BRAND_NAVY }
+          },
           children: [
             new Paragraph({
               alignment: AlignmentType.LEFT,
-              children: [new TextRun({ text: 'Event Details', bold: true, color: 'FFFFFF', size: 18 })]
+              children: [new TextRun({ text: 'Event Details & Formal Narrative', bold: true, color: 'FFFFFF', size: 18 })]
             })
           ]
         }),
         new TableCell({
           width: { size: 2800, type: WidthType.DXA },
           shading: { fill: BRAND_NAVY },
+          borders: {
+            top: { style: BorderStyle.SINGLE, size: 4, color: BRAND_NAVY },
+            bottom: { style: BorderStyle.SINGLE, size: 4, color: BRAND_NAVY },
+            left: { style: BorderStyle.SINGLE, size: 4, color: BRAND_NAVY },
+            right: { style: BorderStyle.SINGLE, size: 4, color: BRAND_NAVY }
+          },
           children: [
             new Paragraph({
               alignment: AlignmentType.CENTER,
-              children: [new TextRun({ text: 'Photo / Certificate', bold: true, color: 'FFFFFF', size: 18 })]
+              children: [new TextRun({ text: 'Certificate / Photograph', bold: true, color: 'FFFFFF', size: 18 })]
             })
           ]
         })
@@ -1093,6 +1222,15 @@ async function generateDocx(records, metadata) {
 
   records.forEach((record, index) => {
     const narrative = buildActivityNarrative(record)
+    const typeColorRaw = getTypeColor(record.type_name)
+    const typeColor = typeColorRaw.replace('#', '')
+
+    const rowBorders = {
+      top: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' },
+      bottom: { style: BorderStyle.SINGLE, size: 6, color: 'CBD5E1' },
+      left: { style: BorderStyle.SINGLE, size: 24, color: typeColor },
+      right: { style: BorderStyle.SINGLE, size: 4, color: 'E2E8F0' }
+    }
 
     // Build Event Details Cell Paragraphs
     const detailsParagraphs = [
@@ -1101,23 +1239,26 @@ async function generateDocx(records, metadata) {
           new TextRun({
             text: `[${(record.type_name || 'Activity').toUpperCase()}] `,
             bold: true,
-            color: BRAND_GOLD,
+            color: typeColor,
             size: 18
           }),
           new TextRun({
-            text: `${formatNarrativeDateRange(record)} `,
+            text: `${formatNarrativeDateRange(record)}   `,
             bold: true,
+            color: '1E293B',
             size: 18
           }),
           new TextRun({
-            text: record.workflow_status === 'Approved' ? '(✓ Approved)' : '(Pending Review)',
+            text: record.workflow_status === 'Approved' ? '✓ Approved by HOD' : '(Pending Review)',
+            bold: true,
             color: record.workflow_status === 'Approved' ? '15803D' : 'B45309',
             size: 16
           })
         ]
       }),
       new Paragraph({
-        spacing: { before: 80, after: 80 },
+        spacing: { before: 80, after: 100 },
+        alignment: AlignmentType.BOTH,
         children: narrative.tokens.map(tok => new TextRun({
           text: tok.text,
           bold: tok.bold,
@@ -1126,19 +1267,21 @@ async function generateDocx(records, metadata) {
         }))
       }),
       new Paragraph({
+        spacing: { before: 60 },
         children: [
-          new TextRun({ text: '• Role: ', bold: true, size: 17 }),
-          new TextRun({ text: `${record.faculty_role || 'Participant'}   `, size: 17 }),
-          new TextRun({ text: '• Mode & Scope: ', bold: true, size: 17 }),
-          new TextRun({ text: `${[record.mode, record.scope].filter(Boolean).join(' · ')}`, size: 17 })
+          new TextRun({ text: 'ROLE: ', bold: true, size: 15, color: '64748B' }),
+          new TextRun({ text: `${record.faculty_role || 'Participant'}      `, bold: true, size: 16, color: '1E293B' }),
+          new TextRun({ text: 'MODE · LEVEL: ', bold: true, size: 15, color: '64748B' }),
+          new TextRun({ text: `${[record.mode, record.scope].filter(Boolean).join(' · ')}`, bold: true, size: 16, color: '1E293B' })
         ]
       }),
       new Paragraph({
+        spacing: { before: 40 },
         children: [
-          new TextRun({ text: '• Host / Organiser: ', bold: true, size: 17 }),
-          new TextRun({ text: `${normalizeHost(record.host_organisation)}   `, size: 17 }),
-          new TextRun({ text: '• Venue: ', bold: true, size: 17 }),
-          new TextRun({ text: `${record.venue || 'Online Platform'}`, size: 17 })
+          new TextRun({ text: 'HOST / ORGANISER: ', bold: true, size: 15, color: '64748B' }),
+          new TextRun({ text: `${normalizeHost(record.host_organisation)}      `, bold: true, size: 16, color: '1E293B' }),
+          new TextRun({ text: 'VENUE: ', bold: true, size: 15, color: '64748B' }),
+          new TextRun({ text: `${record.venue || 'Online Platform'}`, bold: true, size: 16, color: '1E293B' })
         ]
       })
     ]
@@ -1153,17 +1296,18 @@ async function generateDocx(records, metadata) {
             children: [
               new ImageRun({
                 data: record.reportMedia.mainImage,
-                transformation: { width: 140, height: 95 }
+                transformation: { width: 170, height: 115 }
               })
             ]
           }),
           new Paragraph({
             alignment: AlignmentType.CENTER,
+            spacing: { before: 40 },
             children: [
               new TextRun({
                 text: record.reportMedia.caption || 'Certificate of Completion',
                 italics: true,
-                size: 16,
+                size: 15,
                 color: '64748B'
               })
             ]
@@ -1177,7 +1321,7 @@ async function generateDocx(records, metadata) {
               new TextRun({
                 text: 'Certificate on file in repository',
                 italics: true,
-                size: 16,
+                size: 15,
                 color: '64748B'
               })
             ]
@@ -1192,7 +1336,7 @@ async function generateDocx(records, metadata) {
             new TextRun({
               text: 'No certificate or photo\nuploaded for this activity',
               italics: true,
-              size: 16,
+              size: 15,
               color: '94A3B8'
             })
           ]
@@ -1204,7 +1348,9 @@ async function generateDocx(records, metadata) {
       new TableRow({
         children: [
           new TableCell({
-            width: { size: 900, type: WidthType.DXA },
+            width: { size: 850, type: WidthType.DXA },
+            borders: rowBorders,
+            shading: { fill: 'F8FAFC' },
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
@@ -1212,19 +1358,22 @@ async function generateDocx(records, metadata) {
                   new TextRun({
                     text: String(index + 1).padStart(2, '0'),
                     bold: true,
-                    size: 20,
-                    color: BRAND_NAVY
+                    size: 24,
+                    color: typeColor
                   })
                 ]
               })
             ]
           }),
           new TableCell({
-            width: { size: 5800, type: WidthType.DXA },
+            width: { size: 5850, type: WidthType.DXA },
+            borders: rowBorders,
             children: detailsParagraphs
           }),
           new TableCell({
             width: { size: 2800, type: WidthType.DXA },
+            borders: rowBorders,
+            shading: { fill: 'FAFAFA' },
             children: photoParagraphs
           })
         ]
@@ -1237,12 +1386,12 @@ async function generateDocx(records, metadata) {
       rows: tableRows,
       width: { size: 9500, type: WidthType.DXA }
     }),
-    new Paragraph({ spacing: { before: 240 } }),
+    new Paragraph({ spacing: { before: 280 } }),
     new Paragraph({
       alignment: AlignmentType.RIGHT,
       children: [
         new TextRun({
-          text: 'Head of Department\n(Dr. A. R. Surve)\nDepartment of Computer Science and Engineering\nWalchand College of Engineering, Sangli',
+          text: '_____________________________________\nHead of Department\n(Dr. A. R. Surve)\nProfessor & Head, CSE\nWalchand College of Engineering, Sangli',
           bold: true,
           size: 18,
           color: BRAND_NAVY

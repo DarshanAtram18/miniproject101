@@ -256,7 +256,7 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
         ]
       };
     });
-    setErrors((previous) => ({ ...previous, files: undefined }));
+    setErrors((previous) => ({ ...previous, files: undefined, evidence: undefined }));
   };
 
   const setPrimaryAttachment = (target) => {
@@ -322,6 +322,13 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
         if (!guest.organisation.trim()) nextErrors[`guest.${index}.organisation`] = 'Organisation is required.';
       });
     }
+
+    const hasProof = form.newAttachments.some((a) => a.kind === 'evidence' || a.kind === 'report') ||
+      form.existingAttachments.some((a) => (a.kind === 'evidence' || a.kind === 'report') && !form.removeAttachmentIds.includes(a.id));
+    if (!hasProof) {
+      nextErrors.evidence = 'Certificate or proof document is mandatory for activity submission.';
+    }
+
     return nextErrors;
   };
 
@@ -991,7 +998,7 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
 
                   <div className="form-group">
                     <label htmlFor="upload-proof">
-                      Certificate / Proof Document <small>(PDF, Word, Image)</small>
+                      Certificate / Proof Document <Required /> <small>(PDF, Word, Image – Mandatory)</small>
                     </label>
                     <input
                       id="upload-proof"
@@ -1007,11 +1014,12 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
                         </a>
                       </div>
                     )}
+                    <FieldError message={errors.evidence} />
                   </div>
 
                   <div className="form-group form-full">
                     <label htmlFor="upload-photo">
-                      Photo(s) of Event <small>(Multiple JPG, PNG, WebP allowed – up to 100 photos)</small>
+                      Photo(s) of Event <small>(Optional – Multiple JPG, PNG, WebP allowed, up to 100 photos)</small>
                     </label>
                     <input
                       id="upload-photo"
