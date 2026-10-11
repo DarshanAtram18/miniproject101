@@ -41,7 +41,16 @@ async function enqueueAppreciationEmail(client, { activityId, userId, recipientE
       created_at,
       updated_at
     ) VALUES ($1, $2, $3, $4, $5, 'PENDING', 0, NOW(), NOW())
-    ON CONFLICT (achievement_id, letter_version) DO NOTHING
+    ON CONFLICT (achievement_id, letter_version)
+    DO UPDATE SET
+      status = 'PENDING',
+      attempt_count = 0,
+      last_error = NULL,
+      next_retry_at = NOW(),
+      locked_at = NULL,
+      locked_by = NULL,
+      updated_at = NOW()
+    WHERE email_jobs.status != 'SENT'
     RETURNING id;
   `
 

@@ -3,6 +3,7 @@ const pool = require('../db/pool')
 const { isLoggedIn, isReviewer } = require('../middleware/auth')
 const { listActivities, getActivityById, canAccessActivity } = require('../services/activityService')
 const { sendActivityApprovedEmail, sendChangesRequestedEmail } = require('../services/emailService')
+const { processNextJob } = require('../services/emailWorker')
 
 router.use(isLoggedIn, isReviewer)
 
@@ -181,6 +182,69 @@ router.get('/stats', async (req, res) => {
   } catch (error) {
     console.error('Reviewer statistics error:', error)
     return res.status(500).json({ error: 'Unable to load reviewer statistics.' })
+  }
+})
+
+// Reviewer/Admin inspection of email jobs queue
+router.get('/email-queue-status', async (req, res) => {
+  try {
+    const jobsResult = await pool.query(
+      `SELECT id, achievement_id, recipient_email, letter_version, status, attempt_count, max_attempts, last_error, next_retry_at, sent_at, created_at, updated_at
+       FROM email_jobs
+       ORDER BY id DESC
+       LIMIT 20`
+    )
+    return res.json({
+      smtpConfigured: Boolean(process.env.SMTP_USER && process.env.SMTP_PASS),
+      smtpUser: process.env.SMTP_USER || null,
+      smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
+      facultyTestEmail: process.env.FACULTY_TEST_EMAIL || 'atram.darshan@walchandsangli.ac.in',
+      jobs: jobsResult.rows
+    })
+  } catch (error) {
+    console.error('Email queue status check error:', error)
+    return res.status(500).json({ error: error.message })
+  }
+})
+
+// Reviewer/Admin manual retry of failed email jobs
+router.post('/email-queue-retry', async (req, res) => {
+  try {
+    const updateResult = await pool.query(
+      `UPDATE email_jobs
+       SET status = 'PENDING',
+           attempt_count = 0,
+           last_error = NULL,
+           next_retry_at = NOW(),
+           locked_at = NULL,
+           locked_by = NULL,
+           updated_at = NOW()
+       WHERE status IN ('FAILED', 'SENDING')
+       RETURNING id, achievement_id`
+    )
+
+    // Trigger worker immediately to process retried jobs
+    setImmediate(async () => {
+      try {
+        let count = 0
+        while (count < 10) {
+          const workerRes = await processNextJob('admin-manual-retry')
+          if (!workerRes.processed) break
+          count++
+        }
+      } catch (e) {
+        console.warn('Manual retry worker error:', e.message)
+      }
+    })
+
+    return res.json({
+      success: true,
+      retriedCount: updateResult.rowCount,
+      retriedJobs: updateResult.rows
+    })
+  } catch (error) {
+    console.error('Email queue retry error:', error)
+    return res.status(500).json({ error: error.message })
   }
 })
 

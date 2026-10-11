@@ -194,6 +194,24 @@ function startEmailWorker({ intervalMs = 5000, workerId } = {}) {
   workerTimer = setInterval(tick, intervalMs)
   if (workerTimer.unref) workerTimer.unref()
 
+  // On worker startup, re-queue any previously failed jobs so they are re-attempted with current configuration
+  pool.query(`
+    UPDATE email_jobs
+    SET status = 'PENDING',
+        attempt_count = 0,
+        last_error = NULL,
+        next_retry_at = NOW(),
+        locked_at = NULL,
+        locked_by = NULL
+    WHERE status = 'FAILED'
+  `).then((res) => {
+    if (res.rowCount > 0) {
+      console.log(`[emailWorker] Re-enqueued ${res.rowCount} previously failed job(s) for delivery on startup.`)
+    }
+  }).catch(() => {
+    // Ignore if table does not exist yet prior to migrations
+  })
+
   // Run first tick shortly after start
   setTimeout(tick, 500).unref?.()
 }
