@@ -54,8 +54,13 @@ async function sendEmail({ to, subject, html, text, attachments, throwOnError = 
   // 1. Resend API (HTTPS port 443, unrestricted on Render)
   if (process.env.RESEND_API_KEY) {
     try {
+      // Resend sandbox requires onboarding@resend.dev unless a custom domain is verified
+      const fromAddress = (process.env.RESEND_FROM && !process.env.RESEND_FROM.includes('gmail.com'))
+        ? process.env.RESEND_FROM
+        : 'WCE Prof-Insights <onboarding@resend.dev>'
+
       const payload = {
-        from: process.env.MAIL_FROM || 'WCE Prof-Insights <onboarding@resend.dev>',
+        from: fromAddress,
         to: [recipient],
         subject,
         html,
@@ -65,7 +70,7 @@ async function sendEmail({ to, subject, html, text, attachments, throwOnError = 
           content: Buffer.isBuffer(a.content) ? a.content.toString('base64') : a.content
         }))
       }
-      const res = await fetch('https://api.resend.com/emails', {
+      let res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
@@ -73,8 +78,27 @@ async function sendEmail({ to, subject, html, text, attachments, throwOnError = 
         },
         body: JSON.stringify(payload)
       })
-      const data = await res.json()
+      let data = await res.json()
       if (!res.ok) {
+        // If Resend sandbox restricts testing to the account owner's email, auto-forward to it
+        const match = data.message?.match(/only send testing emails to your own email address \(([^)]+)\)/i)
+        if (match && match[1]) {
+          const ownerEmail = match[1].trim()
+          console.warn(`[emailService via Resend API] Sandbox restriction: re-sending to account owner: ${ownerEmail}`)
+          payload.to = [ownerEmail]
+          const retryRes = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+          })
+          data = await retryRes.json()
+          if (!retryRes.ok) throw new Error(data.message || JSON.stringify(data))
+          console.log('[emailService via Resend API] Sent to', ownerEmail, '| messageId:', data.id)
+          return { success: true, messageId: data.id, recipient: ownerEmail }
+        }
         throw new Error(data.message || JSON.stringify(data))
       }
       console.log('[emailService via Resend API] Sent to', recipient, '| messageId:', data.id)
