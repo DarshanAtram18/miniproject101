@@ -1,8 +1,9 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import Icon from './Icon';
 import { currentAcademicYears, hasValue, humanize, normalizeHost } from '../utils';
+import { getActiveToken } from '../api';
 
 const legacyTypeAliases = {
   'Value Added Course': 'Value-Added Course',
@@ -112,9 +113,39 @@ const FieldError = ({ message }) => message ? <span className="field-error" role
 
 const Required = () => <span className="required-mark" aria-hidden="true">*</span>;
 
+const DRAFT_KEY = 'wce_activity_draft_v1';
+
 const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, submitting }) => {
-  const [step, setStep] = useState(1);
-  const [form, setForm] = useState(() => normaliseInitial(initialActivity, user));
+  const [step, setStep] = useState(() => {
+    if (!initialActivity) {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY));
+        if (saved?.step && saved.step >= 1 && saved.step <= 3) return saved.step;
+      } catch {}
+    }
+    return 1;
+  });
+
+  const [form, setForm] = useState(() => {
+    const base = normaliseInitial(initialActivity, user);
+    if (!initialActivity) {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY));
+        if (saved?.form) {
+          return {
+            ...base,
+            ...saved.form,
+            details: { ...base.details, ...(saved.form.details || {}) },
+            guestLectures: saved.form.guestLectures || base.guestLectures,
+            newAttachments: [],
+            existingAttachments: []
+          };
+        }
+      } catch {}
+    }
+    return base;
+  });
+
   const [errors, setErrors] = useState({});
   const [zoomLevel, setZoomLevel] = useState('85');
   const [pdfGenerating, setPdfGenerating] = useState(false);
@@ -122,6 +153,36 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
   const [galleryModalOpen, setGalleryModalOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const liveSheetRef = useRef(null);
+
+  // Automatically persist form draft to sessionStorage on changes
+  useEffect(() => {
+    if (!initialActivity) {
+      try {
+        const draft = {
+          step,
+          form: {
+            typeName: form.typeName,
+            title: form.title,
+            academicYear: form.academicYear,
+            mode: form.mode,
+            scope: form.scope,
+            facultyRole: form.facultyRole,
+            startDate: form.startDate,
+            endDate: form.endDate,
+            durationDays: form.durationDays,
+            hostOrganisation: form.hostOrganisation,
+            venue: form.venue,
+            attendanceCount: form.attendanceCount,
+            financialSupport: form.financialSupport,
+            amountClaimed: form.amountClaimed,
+            details: form.details,
+            guestLectures: form.guestLectures
+          }
+        };
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      } catch {}
+    }
+  }, [initialActivity, step, form]);
 
   const flatTypes = useMemo(
     () => catalog.typeGroups.flatMap((group) => group.types.map((type) => ({ ...type, group: group.label }))),
@@ -501,7 +562,7 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
   const liveAttendance = form.newAttachments.find((a) => a.kind === 'attendance') || form.existingAttachments.find((a) => a.kind === 'attendance' && !form.removeAttachmentIds.includes(a.id));
   const liveProof = form.newAttachments.find((a) => a.kind === 'evidence' || a.kind === 'report') || form.existingAttachments.find((a) => (a.kind === 'evidence' || a.kind === 'report') && !form.removeAttachmentIds.includes(a.id));
   
-  const authToken = typeof window !== 'undefined' ? (localStorage.getItem('token') || '') : '';
+  const authToken = getActiveToken();
   const tokenParam = authToken ? `&token=${encodeURIComponent(authToken)}` : '';
 
   // All active images (for multiple image gallery)

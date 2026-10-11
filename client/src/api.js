@@ -21,7 +21,7 @@ export const setApiToken = (token) => {
 
 export const getActiveToken = () => {
   try {
-    const raw = localStorage.getItem(SESSION_KEY);
+    const raw = sessionStorage.getItem(SESSION_KEY);
     if (!raw) return '';
     const parsed = JSON.parse(raw);
     return parsed.token || '';
@@ -34,6 +34,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 && !String(error.config?.url || '').includes('/auth/login')) {
+      sessionStorage.removeItem(SESSION_KEY);
       localStorage.removeItem(SESSION_KEY);
       setApiToken(null);
       authFailureHandler?.(error.response?.data?.error || 'Your session has expired. Please sign in again.');

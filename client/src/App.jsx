@@ -19,17 +19,45 @@ import SubmitActivity from './components/SubmitActivity';
 import Profile from './components/Profile';
 
 const RECORD_CACHE_KEY = 'wce_prof_insights_record_cache_v2';
+const ACTIVE_VIEW_KEY = 'wce_prof_insights_active_view';
+const EDITING_ACTIVITY_KEY = 'wce_editing_activity';
+const DRAFT_KEY = 'wce_activity_draft_v1';
+const VALID_VIEWS = ['dashboard', 'submit', 'records', 'reports', 'profile'];
 
-const readJson = (key, fallback) => {
+// Clear legacy localStorage sessions so previous shared credentials don't leak into new tabs
+try {
+  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(RECORD_CACHE_KEY);
+} catch {}
+
+const readSessionJson = (key, fallback) => {
   try {
-    return JSON.parse(localStorage.getItem(key)) || fallback;
+    return JSON.parse(sessionStorage.getItem(key)) || fallback;
   } catch {
     return fallback;
   }
 };
 
-const initialSession = readJson(SESSION_KEY, null);
-const initialCache = initialSession ? readJson(RECORD_CACHE_KEY, null) : null;
+const getViewFromHash = () => {
+  if (typeof window === 'undefined') return null;
+  const hash = (window.location.hash || '').replace(/^#\/?/, '').split('?')[0].trim().toLowerCase();
+  return VALID_VIEWS.includes(hash) ? hash : null;
+};
+
+const getInitialView = (hasSession) => {
+  if (!hasSession) return 'login';
+  const hashView = getViewFromHash();
+  if (hashView) return hashView;
+  try {
+    const saved = sessionStorage.getItem(ACTIVE_VIEW_KEY);
+    if (saved && VALID_VIEWS.includes(saved)) return saved;
+  } catch {}
+  return 'dashboard';
+};
+
+const initialSession = readSessionJson(SESSION_KEY, null);
+const initialCache = initialSession ? readSessionJson(RECORD_CACHE_KEY, null) : null;
+const initialEditingActivity = initialSession ? readSessionJson(EDITING_ACTIVITY_KEY, null) : null;
 setApiToken(initialSession?.token);
 
 const emptyPagination = { page: 1, pageSize: 25, total: 0, totalPages: 1 };
@@ -44,7 +72,7 @@ const viewLabels = {
 
 const App = () => {
   const [session, setSession] = useState(initialSession);
-  const [view, setView] = useState(initialSession ? 'dashboard' : 'login');
+  const [view, setView] = useState(() => getInitialView(Boolean(initialSession)));
   const [catalog, setCatalog] = useState(fallbackCatalog);
   const [records, setRecords] = useState(initialCache?.items || []);
   const [pagination, setPagination] = useState(initialCache?.pagination || emptyPagination);
@@ -52,7 +80,7 @@ const App = () => {
   const [recordsError, setRecordsError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
-  const [editingActivity, setEditingActivity] = useState(null);
+  const [editingActivity, setEditingActivity] = useState(initialEditingActivity);
   const [submitting, setSubmitting] = useState(false);
   const [notification, setNotification] = useState(null);
   const [notifications, setNotifications] = useState([]);
@@ -85,13 +113,38 @@ const App = () => {
       setRecords([]);
       setPagination(emptyPagination);
       setRecordsError('');
-      localStorage.removeItem(RECORD_CACHE_KEY);
+      sessionStorage.removeItem(RECORD_CACHE_KEY);
+      sessionStorage.removeItem(ACTIVE_VIEW_KEY);
+      sessionStorage.removeItem(EDITING_ACTIVITY_KEY);
     });
     return () => {
       setAuthFailureHandler(null);
       window.clearTimeout(notificationTimer.current);
     };
   }, []);
+
+  // Listen for browser Back/Forward navigation or manual hash changes
+  useEffect(() => {
+    const onHashChange = () => {
+      const hashView = getViewFromHash();
+      if (hashView && session?.token) {
+        setView(hashView);
+        sessionStorage.setItem(ACTIVE_VIEW_KEY, hashView);
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, [session?.token]);
+
+  // Sync hash with current active view on mount and navigation
+  useEffect(() => {
+    if (session?.user && view && view !== 'login') {
+      if (window.location.hash !== `#${view}`) {
+        window.location.hash = `#${view}`;
+      }
+      sessionStorage.setItem(ACTIVE_VIEW_KEY, view);
+    }
+  }, [session?.user, view]);
 
   useEffect(() => {
     if (!session?.token) return undefined;
@@ -108,12 +161,12 @@ const App = () => {
         const nextSession = { token: session.token, user: profileResponse.data.user };
         const history = historyResponse.data;
         setSession(nextSession);
-        localStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
         setCatalog(catalogResponse.data);
         setRecords(history.items || []);
         setPagination(history.pagination || emptyPagination);
         setRecordsError('');
-        localStorage.setItem(RECORD_CACHE_KEY, JSON.stringify({ items: history.items || [], pagination: history.pagination || emptyPagination }));
+        sessionStorage.setItem(RECORD_CACHE_KEY, JSON.stringify({ items: history.items || [], pagination: history.pagination || emptyPagination }));
       } catch (error) {
         if (!cancelled && error.response?.status !== 401) {
           setRecordsError(getErrorMessage(error, 'The faculty activity service could not be reached.'));
@@ -159,10 +212,13 @@ const App = () => {
       const response = await api.post('/auth/login', { email, password });
       const nextSession = response.data;
       setApiToken(nextSession.token);
-      localStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
       setSession(nextSession);
       setRecordsLoading(true);
-      setView('dashboard');
+      const targetView = getInitialView(true);
+      setView(targetView);
+      sessionStorage.setItem(ACTIVE_VIEW_KEY, targetView);
+      window.location.hash = `#${targetView}`;
     } catch (error) {
       setLoginError(getErrorMessage(error, 'Unable to sign in. Check that the server is running.'));
     } finally {
@@ -172,10 +228,16 @@ const App = () => {
 
   const logout = () => {
     setApiToken(null);
+    sessionStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(RECORD_CACHE_KEY);
+    sessionStorage.removeItem(ACTIVE_VIEW_KEY);
+    sessionStorage.removeItem(EDITING_ACTIVITY_KEY);
+    sessionStorage.removeItem(DRAFT_KEY);
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(RECORD_CACHE_KEY);
     setSession(null);
     setView('login');
+    window.location.hash = '';
     setRecords([]);
     setPagination(emptyPagination);
     setRecordsError('');
@@ -184,8 +246,15 @@ const App = () => {
   };
 
   const navigate = (nextView) => {
-    setEditingActivity(null);
+    if (nextView !== 'submit') {
+      setEditingActivity(null);
+      sessionStorage.removeItem(EDITING_ACTIVITY_KEY);
+    }
     setView(nextView);
+    sessionStorage.setItem(ACTIVE_VIEW_KEY, nextView);
+    if (window.location.hash !== `#${nextView}`) {
+      window.location.hash = `#${nextView}`;
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -197,7 +266,7 @@ const App = () => {
       const response = await api.get('/activity/history', { params: { ...filters, pageSize: 25 } });
       setRecords(response.data.items || []);
       setPagination(response.data.pagination || emptyPagination);
-      localStorage.setItem(RECORD_CACHE_KEY, JSON.stringify({ items: response.data.items || [], pagination: response.data.pagination || emptyPagination }));
+      sessionStorage.setItem(RECORD_CACHE_KEY, JSON.stringify({ items: response.data.items || [], pagination: response.data.pagination || emptyPagination }));
     } catch (error) {
       setRecordsError(getErrorMessage(error, 'Unable to load activity records.'));
     } finally {
@@ -208,9 +277,10 @@ const App = () => {
   const editRecord = async (record) => {
     try {
       const response = await api.get(`/activity/${record.act_id}`);
-      setEditingActivity(response.data.activity);
-      setView('submit');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const act = response.data.activity;
+      setEditingActivity(act);
+      sessionStorage.setItem(EDITING_ACTIVITY_KEY, JSON.stringify(act));
+      navigate('submit');
     } catch (error) {
       showNotification(getErrorMessage(error, 'Unable to open the activity for editing.'), 'error');
     }
@@ -232,7 +302,9 @@ const App = () => {
       }
       showNotification(payload.saveAsDraft ? 'Draft saved successfully.' : activityId ? 'Activity resubmitted successfully.' : 'Activity submitted successfully.');
       setEditingActivity(null);
-      setView('records');
+      sessionStorage.removeItem(EDITING_ACTIVITY_KEY);
+      sessionStorage.removeItem(DRAFT_KEY);
+      navigate('records');
       await loadRecords({ page: 1 });
     } catch (error) {
       showNotification(getErrorMessage(error, 'Unable to save the activity.'), 'error');
@@ -293,7 +365,7 @@ const App = () => {
     setSession((prev) => {
       if (!prev) return prev;
       const nextSession = { ...prev, user: { ...prev.user, ...updatedUser } };
-      localStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
       return nextSession;
     });
   };
@@ -310,7 +382,21 @@ const App = () => {
       <Breadcrumb current={viewLabels[view]} navigate={navigate} />
       <main className="app-main" id="main-content">
         {view === 'dashboard' && <Dashboard user={user} records={records} total={pagination.total} loading={recordsLoading} error={recordsError} navigate={navigate} reload={() => loadRecords({ page: 1 })} />}
-        {view === 'submit' && <SubmitActivity key={editingActivity?.act_id || 'new-activity'} user={user} catalog={catalog} initialActivity={editingActivity} onSubmit={saveActivity} onCancel={() => navigate(editingActivity ? 'records' : 'dashboard')} submitting={submitting} />}
+        {view === 'submit' && (
+          <SubmitActivity
+            key={editingActivity?.act_id || 'new-activity'}
+            user={user}
+            catalog={catalog}
+            initialActivity={editingActivity}
+            onSubmit={saveActivity}
+            onCancel={() => {
+              sessionStorage.removeItem(EDITING_ACTIVITY_KEY);
+              sessionStorage.removeItem(DRAFT_KEY);
+              navigate(editingActivity ? 'records' : 'dashboard');
+            }}
+            submitting={submitting}
+          />
+        )}
         {view === 'records' && <Records user={user} records={records} loading={recordsLoading} error={recordsError} pagination={pagination} catalog={catalog} onReload={loadRecords} onEdit={editRecord} onDelete={deleteRecord} onReview={reviewRecord} navigate={navigate} showNotification={showNotification} />}
         {view === 'reports' && <Reports user={user} catalog={catalog} records={records} total={pagination.total} onDownload={downloadReport} showNotification={showNotification} />}
         {view === 'profile' && <Profile user={user} onUpdateUser={updateUser} onChangePassword={changePassword} onSignOut={logout} />}
