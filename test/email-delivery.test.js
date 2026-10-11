@@ -200,7 +200,7 @@ test('processJob successfully processes approved achievement and delivers email 
       if (sql.includes('SELECT id, name, email FROM users')) {
         return { rows: [{ id: 10, name: 'Prof. Sharma', email: 'sharma@wce.ac.in' }] }
       }
-      if (sql.includes('UPDATE email_jobs SET status = \'SENT\'')) {
+      if (sql.includes("status = 'SENT'")) {
         markedSentJobId = params[0]
         return { rows: [] }
       }
@@ -252,5 +252,18 @@ test('processJob successfully processes approved achievement and delivers email 
   assert.ok(Buffer.isBuffer(sentParams.attachments[0].content))
   assert.equal(sentParams.attachments[0].content.subarray(0, 5).toString('ascii'), '%PDF-')
 })
+
+test('getEffectiveRecipient routes faculty/club to atram.darshan@walchandsangli.ac.in while preserving HOD', () => {
+  const { getEffectiveRecipient } = require('../src/services/emailService')
+
+  // Faculty and club emails route to target test address
+  assert.equal(getEffectiveRecipient('darshan@gmail.com'), 'atram.darshan@walchandsangli.ac.in')
+  assert.equal(getEffectiveRecipient('acm@wce'), 'atram.darshan@walchandsangli.ac.in')
+  assert.equal(getEffectiveRecipient('sharma@wce.ac.in'), 'atram.darshan@walchandsangli.ac.in')
+
+  // HOD emails are preserved without routing
+  assert.equal(getEffectiveRecipient('hod.cse@wce.ac.in'), 'hod.cse@wce.ac.in')
+})
+
 
 

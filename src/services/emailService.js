@@ -13,6 +13,24 @@ const transporter = nodemailer.createTransport({
 
 const FROM = process.env.MAIL_FROM || process.env.SMTP_FROM || `"WCE Prof-Insights" <${process.env.SMTP_USER}>`
 
+// Faculty & club test email override (defaults to atram.darshan@walchandsangli.ac.in for testing/demo)
+const FACULTY_TEST_EMAIL = process.env.FACULTY_TEST_EMAIL !== undefined
+  ? process.env.FACULTY_TEST_EMAIL
+  : 'atram.darshan@walchandsangli.ac.in'
+
+function getEffectiveRecipient(to) {
+  if (
+    FACULTY_TEST_EMAIL &&
+    FACULTY_TEST_EMAIL !== 'none' &&
+    FACULTY_TEST_EMAIL !== 'false' &&
+    !to.includes('hod.cse@wce.ac.in') &&
+    to !== process.env.HOD_EMAIL
+  ) {
+    return FACULTY_TEST_EMAIL
+  }
+  return to
+}
+
 /**
  * Send an email with optional attachments.
  * If throwOnError is true, rethrows on failure so queue workers can retry.
@@ -25,12 +43,18 @@ async function sendEmail({ to, subject, html, text, attachments, throwOnError = 
     }
     return { skipped: true }
   }
+
+  const recipient = getEffectiveRecipient(to)
+  if (recipient !== to) {
+    console.log(`[emailService] Routing faculty/club email (original: ${to}) -> ${recipient}`)
+  }
+
   try {
-    const info = await transporter.sendMail({ from: FROM, to, subject, html, text, attachments })
-    console.log('[emailService] Email sent to', to, '|', subject, '| messageId:', info.messageId)
-    return { success: true, messageId: info.messageId }
+    const info = await transporter.sendMail({ from: FROM, to: recipient, subject, html, text, attachments })
+    console.log('[emailService] Email sent to', recipient, '|', subject, '| messageId:', info.messageId)
+    return { success: true, messageId: info.messageId, recipient }
   } catch (err) {
-    console.error('[emailService] Failed to send email to', to, ':', err.message)
+    console.error('[emailService] Failed to send email to', recipient, ':', err.message)
     if (throwOnError) throw err
     return { success: false, error: err.message }
   }
@@ -247,5 +271,6 @@ module.exports = {
   sendChangesRequestedEmail,
   sendAppreciationLetterEmail,
   sendNewSubmissionEmailToHod,
-  sendResubmissionEmailToHod
+  sendResubmissionEmailToHod,
+  getEffectiveRecipient
 }
