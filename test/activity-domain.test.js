@@ -207,6 +207,33 @@ test('type-specific required fields and conditional funding details are enforced
   assert.ok(hasError(visitErrors, 'Academic relevance / learning objective is required'))
   assert.ok(hasError(fundingErrors, 'Funding agency is required'))
   assert.ok(hasError(fundingErrors, 'valid funded amount'))
+
+  // Default / No funding should normalize smoothly without any funding errors
+  const unstatedFundedWebinar = normalizeWebinar({ details: {} })
+  assert.equal(unstatedFundedWebinar.details.funded, 'No')
+  const unstatedFundedErrors = validateActivity(unstatedFundedWebinar)
+  assert.ok(!hasError(unstatedFundedErrors, 'funding'))
+
+  const explicitNoFundingWebinar = normalizeWebinar({ details: { funded: 'No' } })
+  assert.equal(explicitNoFundingWebinar.details.funded, 'No')
+  const explicitNoFundingErrors = validateActivity(explicitNoFundingWebinar)
+  assert.ok(!hasError(explicitNoFundingErrors, 'funding'))
+
+  // Fee-funded activity with agency and formatted currency/zero amount should normalize and pass cleanly
+  const validFundedWebinar = normalizeWebinar({
+    details: { funded: 'Yes', fundingAgency: 'TEQIP / AICTE', fundingAmount: '₹ 5,000' }
+  })
+  assert.equal(validFundedWebinar.details.funded, 'Yes')
+  assert.equal(validFundedWebinar.details.fundingAmount, '5000')
+  const validFundedErrors = validateActivity(validFundedWebinar)
+  assert.ok(!hasError(validFundedErrors, 'funding'))
+
+  const zeroFeeFundedWebinar = normalizeWebinar({
+    details: { funded: 'Yes', fundingAgency: 'WCE Institutional Sponsorship', fundingAmount: '0' }
+  })
+  assert.equal(zeroFeeFundedWebinar.details.funded, 'Yes')
+  const zeroFeeFundedErrors = validateActivity(zeroFeeFundedWebinar)
+  assert.ok(!hasError(zeroFeeFundedErrors, 'funding'))
 })
 
 test('server-side validation rejects a faculty role that is not offered for the selected type', () => {

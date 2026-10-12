@@ -86,7 +86,9 @@ const safeInteger = (value) => {
 
 const safeNumber = (value) => {
   if (value === '' || value === undefined || value === null) return null
-  const number = Number(value)
+  const clean = typeof value === 'string' ? value.replace(/[₹,Rs.\s]/gi, '').trim() : value
+  if (clean === '') return null
+  const number = Number(clean)
   return Number.isFinite(number) && number >= 0 ? number : null
 }
 
@@ -192,6 +194,22 @@ function normalizeActivityPayload(body, user, targetStatus = 'Submitted') {
   const typeName = legacyTypeAliases[rawTypeName] || rawTypeName
   const type = typeMap.get(typeName)
   const details = safeObject(body.details)
+  if (type?.supportsFunding) {
+    const rawFunded = String(details.funded || '').trim().toLowerCase()
+    const isFunded = rawFunded === 'yes' || rawFunded === 'true' || details.funded === true
+    if (isFunded) {
+      details.funded = 'Yes'
+      details.fundingAgency = safeText(details.fundingAgency, 500)
+      if (details.fundingAmount !== undefined && details.fundingAmount !== null && details.fundingAmount !== '') {
+        const cleanAmount = String(details.fundingAmount).replace(/[₹,Rs.\s]/gi, '').trim()
+        details.fundingAmount = cleanAmount === '' ? null : cleanAmount
+      }
+    } else {
+      details.funded = 'No'
+      delete details.fundingAgency
+      delete details.fundingAmount
+    }
+  }
   const attachments = normalizeAttachments(body.attachments)
   const guests = normalizeGuests(body.guests)
 

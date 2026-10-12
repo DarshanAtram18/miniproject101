@@ -44,7 +44,10 @@ const formatDateDMY = (dateStr) => {
 };
 
 const normaliseInitial = (record, user) => {
-  const details = record?.details || {};
+  const details = { ...(record?.details || {}) };
+  if (!details.funded) {
+    details.funded = 'No';
+  }
   return {
     typeName: legacyTypeAliases[record?.type_name] || record?.type_name || 'Workshop (Attended)',
     title: record?.title || '',
@@ -121,7 +124,9 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
       try {
         const saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY));
         if (saved?.step && saved.step >= 1 && saved.step <= 3) return saved.step;
-      } catch {}
+      } catch (_err) {
+        void _err;
+      }
     }
     return 1;
   });
@@ -135,24 +140,74 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
           return {
             ...base,
             ...saved.form,
-            details: { ...base.details, ...(saved.form.details || {}) },
+            details: { funded: 'No', ...base.details, ...(saved.form.details || {}) },
             guestLectures: saved.form.guestLectures || base.guestLectures,
             newAttachments: [],
             existingAttachments: []
           };
         }
-      } catch {}
+      } catch (_err) {
+        void _err;
+      }
     }
     return base;
   });
 
   const [errors, setErrors] = useState({});
+  const [diagnosticList, setDiagnosticList] = useState([]);
   const [zoomLevel, setZoomLevel] = useState('85');
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [declaration, setDeclaration] = useState(false);
   const [galleryModalOpen, setGalleryModalOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const liveSheetRef = useRef(null);
+
+  // Memoize whether proof document is present
+  const hasProof = useMemo(() => {
+    return form.newAttachments.some((a) => a.kind === 'evidence' || a.kind === 'report') ||
+      form.existingAttachments.some((a) => (a.kind === 'evidence' || a.kind === 'report') && !form.removeAttachmentIds.includes(a.id));
+  }, [form.newAttachments, form.existingAttachments, form.removeAttachmentIds]);
+
+  // Build exact, clear problem diagnostics for faculty & clubs
+  const buildDiagnostics = (s1Errors = {}, s2Errors = {}) => {
+    const list = [];
+    if (s1Errors.typeName) list.push({ step: 1, stepName: 'Step 1: Activity Basics', message: s1Errors.typeName, fieldId: 'input-type' });
+    if (s1Errors.title) list.push({ step: 1, stepName: 'Step 1: Activity Basics', message: s1Errors.title, fieldId: 'input-title' });
+    if (s1Errors.academicYear) list.push({ step: 1, stepName: 'Step 1: Activity Basics', message: s1Errors.academicYear, fieldId: 'input-acad-year' });
+    if (s1Errors.startDate) list.push({ step: 1, stepName: 'Step 1: Activity Basics', message: s1Errors.startDate, fieldId: 'input-start-date' });
+    if (s1Errors.endDate) list.push({ step: 1, stepName: 'Step 1: Activity Basics', message: s1Errors.endDate, fieldId: 'input-end-date' });
+    if (s1Errors.mode) list.push({ step: 1, stepName: 'Step 1: Activity Basics', message: s1Errors.mode, fieldId: 'input-mode' });
+    if (s1Errors.hostOrganisation) list.push({ step: 1, stepName: 'Step 1: Activity Basics', message: s1Errors.hostOrganisation, fieldId: 'input-host' });
+    if (s1Errors.venue) list.push({ step: 1, stepName: 'Step 1: Activity Basics', message: s1Errors.venue, fieldId: 'input-venue' });
+
+    if (s2Errors.summary) list.push({ step: 2, stepName: 'Step 2: Details & Evidence', message: s2Errors.summary, fieldId: 'activity-summary' });
+    if (s2Errors['details.funded']) list.push({ step: 2, stepName: 'Step 2: Details & Evidence', message: s2Errors['details.funded'], fieldId: 'form-group-funding' });
+    if (s2Errors['details.fundingAgency']) list.push({ step: 2, stepName: 'Step 2: Details & Evidence', message: s2Errors['details.fundingAgency'], fieldId: 'input-fund-agency' });
+    if (s2Errors['details.fundingAmount']) list.push({ step: 2, stepName: 'Step 2: Details & Evidence', message: s2Errors['details.fundingAmount'], fieldId: 'input-fund-amt' });
+    if (s2Errors.evidence) list.push({ step: 2, stepName: 'Step 2: Details & Evidence', message: s2Errors.evidence, fieldId: 'upload-proof' });
+    if (s2Errors.guests) list.push({ step: 2, stepName: 'Step 2: Details & Evidence', message: s2Errors.guests, fieldId: 'form-group-guests' });
+
+    Object.entries(s2Errors).forEach(([key, msg]) => {
+      if (!list.some((item) => item.message === msg)) {
+        list.push({ step: 2, stepName: 'Step 2: Details & Evidence', message: msg, fieldId: key });
+      }
+    });
+
+    return list;
+  };
+
+  const jumpToDiagnosticField = (item) => {
+    setStep(item.step);
+    setTimeout(() => {
+      if (item.fieldId) {
+        const el = document.getElementById(item.fieldId);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.focus?.();
+        }
+      }
+    }, 120);
+  };
 
   // Automatically persist form draft to sessionStorage on changes
   useEffect(() => {
@@ -180,7 +235,9 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
           }
         };
         sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-      } catch {}
+      } catch (_err) {
+        void _err;
+      }
     }
   }, [initialActivity, step, form]);
 
@@ -210,10 +267,11 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
       facultyRole: defaultRole,
       mode: nextType?.eventBased ? (previous.mode || 'Offline') : '',
       scope: nextType?.requiresScope ? (previous.scope || 'National') : '',
-      details: {},
+      details: { funded: 'No' },
       guests: []
     }));
     setErrors({});
+    setDiagnosticList([]);
   };
 
   const changeStartDate = (value) => {
@@ -384,8 +442,20 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
       });
     }
 
-    const hasProof = form.newAttachments.some((a) => a.kind === 'evidence' || a.kind === 'report') ||
-      form.existingAttachments.some((a) => (a.kind === 'evidence' || a.kind === 'report') && !form.removeAttachmentIds.includes(a.id));
+    if (selectedType?.supportsFunding) {
+      if (!['Yes', 'No'].includes(form.details.funded)) {
+        nextErrors['details.funded'] = 'Please select whether funding or fee support was involved (select "No" if not funded).';
+      } else if (form.details.funded === 'Yes') {
+        if (!form.details.fundingAgency?.trim()) {
+          nextErrors['details.fundingAgency'] = 'Funding agency or sponsor is required when funding was involved.';
+        }
+        const amtClean = String(form.details.fundingAmount ?? '').replace(/[₹,Rs.\s]/gi, '').trim();
+        if (amtClean === '' || isNaN(Number(amtClean)) || Number(amtClean) < 0) {
+          nextErrors['details.fundingAmount'] = 'Please enter a valid funded amount in ₹ (enter 0 if waived / sponsored).';
+        }
+      }
+    }
+
     if (!hasProof) {
       nextErrors.evidence = 'Certificate or proof document is mandatory for activity submission.';
     }
@@ -399,17 +469,20 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
         const step1Errors = validateStep1();
         if (Object.keys(step1Errors).length > 0) {
           setErrors(step1Errors);
+          setDiagnosticList(buildDiagnostics(step1Errors, {}));
           return;
         }
       } else if (step === 2) {
         const step2Errors = validateStep2();
         if (Object.keys(step2Errors).length > 0) {
           setErrors(step2Errors);
+          setDiagnosticList(buildDiagnostics({}, step2Errors));
           return;
         }
       }
     }
     setErrors({});
+    setDiagnosticList([]);
     setStep(targetStep);
   };
 
@@ -421,12 +494,18 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
 
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
-      if (Object.keys(step1Errors).length > 0) setStep(1);
-      else if (Object.keys(step2Errors).length > 0) setStep(2);
+      const diagnostics = buildDiagnostics(step1Errors, step2Errors);
+      setDiagnosticList(diagnostics);
+      if (Object.keys(step1Errors).length > 0) {
+        setStep(1);
+      } else if (Object.keys(step2Errors).length > 0) {
+        setStep(2);
+      }
       return;
     }
 
     try {
+      setDiagnosticList([]);
       const serialisedNewAttachments = await Promise.all(
         form.newAttachments.map(async (item) => ({
           kind: item.kind,
@@ -453,6 +532,20 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
           isReportVisible: item.isReportVisible !== false
         }));
 
+      const sanitizedDetails = { ...form.details };
+      if (selectedType?.supportsFunding) {
+        if (sanitizedDetails.funded === 'Yes') {
+          sanitizedDetails.funded = 'Yes';
+          if (sanitizedDetails.fundingAmount !== undefined && sanitizedDetails.fundingAmount !== null && sanitizedDetails.fundingAmount !== '') {
+            sanitizedDetails.fundingAmount = String(sanitizedDetails.fundingAmount).replace(/[₹,Rs.\s]/gi, '').trim();
+          }
+        } else {
+          sanitizedDetails.funded = 'No';
+          delete sanitizedDetails.fundingAgency;
+          delete sanitizedDetails.fundingAmount;
+        }
+      }
+
       const payload = {
         typeName: form.typeName,
         title: form.title.trim(),
@@ -474,7 +567,7 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
         evidenceAvailability: form.evidenceAvailability,
         evidenceNote: form.evidenceNote.trim() || null,
         officialUrl: form.officialUrl.trim() || null,
-        details: form.details,
+        details: sanitizedDetails,
         guests: form.guests,
         attachments: [...activeExistingAttachments, ...serialisedNewAttachments],
         status: targetStatus
@@ -482,7 +575,66 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
 
       await onSubmit(payload, initialActivity?.act_id);
     } catch (err) {
-      setErrors({ form: err.message || 'Unable to save activity.' });
+      const serverMsg = err.response?.data?.error || err.message || 'Unable to save activity.';
+      const serverErrors = err.response?.data?.errors || [serverMsg];
+      
+      const newDiagnostics = [];
+      let targetStep = null;
+
+      serverErrors.forEach((msg) => {
+        const lower = String(msg).toLowerCase();
+        if (lower.includes('funding') || lower.includes('funded') || lower.includes('fee')) {
+          newDiagnostics.push({
+            step: 2,
+            stepName: 'Step 2: Details & Evidence',
+            message: `Funding / Fee Support Issue: ${msg}`,
+            fieldId: 'form-group-funding'
+          });
+          if (!targetStep) targetStep = 2;
+        } else if (lower.includes('proof') || lower.includes('evidence') || lower.includes('url') || lower.includes('attachment') || lower.includes('photo')) {
+          newDiagnostics.push({
+            step: 2,
+            stepName: 'Step 2: Details & Evidence',
+            message: `Proof / Evidence Issue: ${msg}`,
+            fieldId: 'upload-proof'
+          });
+          if (!targetStep) targetStep = 2;
+        } else if (lower.includes('guest')) {
+          newDiagnostics.push({
+            step: 2,
+            stepName: 'Step 2: Details & Evidence',
+            message: `Guest Resource Persons Issue: ${msg}`,
+            fieldId: 'form-group-guests'
+          });
+          if (!targetStep) targetStep = 2;
+        } else if (lower.includes('title') || lower.includes('date') || lower.includes('mode') || lower.includes('venue') || lower.includes('academic year') || lower.includes('role')) {
+          newDiagnostics.push({
+            step: 1,
+            stepName: 'Step 1: Activity Basics',
+            message: `Activity Basics Issue: ${msg}`,
+            fieldId: lower.includes('title') ? 'input-title' : lower.includes('venue') ? 'input-venue' : 'input-start-date'
+          });
+          if (!targetStep) targetStep = 1;
+        } else {
+          newDiagnostics.push({
+            step: step,
+            stepName: 'Submission Error',
+            message: msg
+          });
+        }
+      });
+
+      setDiagnosticList(newDiagnostics);
+      setErrors({ form: serverMsg });
+      if (targetStep) {
+        setStep(targetStep);
+        setTimeout(() => {
+          const firstDiag = newDiagnostics[0];
+          if (firstDiag?.fieldId) {
+            document.getElementById(firstDiag.fieldId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 150);
+      }
     }
   };
 
@@ -603,7 +755,89 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
         </div>
       </div>
 
-      {errors.form && (
+      {diagnosticList.length > 0 && (
+        <div
+          className="submission-diagnostic-card"
+          role="alert"
+          style={{
+            backgroundColor: '#fff1f2',
+            border: '2px solid #e11d48',
+            borderRadius: '10px',
+            padding: '16px 18px',
+            marginBottom: '20px',
+            boxShadow: '0 4px 14px rgba(225, 29, 72, 0.12)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '24px', lineHeight: 1 }}>⚠️</span>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '800', color: '#9f1239' }}>
+                  Submission Issue Detected: Why This Activity Cannot Be Submitted
+                </h3>
+                <p style={{ margin: '3px 0 0', fontSize: '12.5px', color: '#881337', fontWeight: '500' }}>
+                  The college activity portal requires the following item{diagnosticList.length > 1 ? 's' : ''} before submission for HOD review:
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDiagnosticList([])}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#9f1239', padding: '2px 6px', fontWeight: 'bold' }}
+              title="Dismiss alert"
+            >
+              ✕
+            </button>
+          </div>
+
+          <ul style={{ margin: '12px 0 14px', paddingLeft: '22px', fontSize: '13px', color: '#4c0519', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {diagnosticList.map((item, idx) => (
+              <li key={idx} style={{ lineHeight: '1.45' }}>
+                <strong style={{ color: item.step === 1 ? '#0369a1' : item.step === 2 ? '#b45309' : '#9f1239' }}>
+                  [{item.stepName}]:
+                </strong>{' '}
+                {item.message}
+                <button
+                  type="button"
+                  onClick={() => jumpToDiagnosticField(item)}
+                  style={{
+                    marginLeft: '8px',
+                    background: '#e11d48',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '2px 8px',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  Fix in Step {item.step} →
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', borderTop: '1px solid #fecdd3', paddingTop: '10px' }}>
+            <span style={{ fontSize: '12px', fontWeight: '700', color: '#9f1239', alignSelf: 'center' }}>Direct Navigation:</span>
+            {diagnosticList.some((i) => i.step === 1) && (
+              <button className="btn btn-secondary btn-sm" type="button" onClick={() => goToStep(1)}>
+                Go to Step 1 (Activity Basics)
+              </button>
+            )}
+            {diagnosticList.some((i) => i.step === 2) && (
+              <button className="btn btn-secondary btn-sm" type="button" onClick={() => goToStep(2)}>
+                Go to Step 2 (Details & Evidence)
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {errors.form && diagnosticList.length === 0 && (
         <div className="inline-alert error" style={{ marginBottom: '16px' }}>
           <Icon name="alert" />
           <span>{errors.form}</span>
@@ -929,59 +1163,137 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
 
                 {/* Funding info */}
                 {selectedType?.supportsFunding && (
-                  <div className="form-group form-full">
-                    <label>Registration Fees Funded / Financial Support?</label>
-                    <div style={{ display: 'flex', gap: '16px', marginTop: '6px' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                  <div
+                    className="form-group form-full"
+                    id="form-group-funding"
+                    style={{
+                      background: errors['details.funded'] ? '#fef2f2' : '#f8fafc',
+                      padding: '14px 16px',
+                      borderRadius: '8px',
+                      border: errors['details.funded'] ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
+                      transition: 'border-color 0.2s, background-color 0.2s'
+                    }}
+                  >
+                    <label style={{ fontWeight: '700', color: '#1a365d', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      Registration Fees Funded / Financial Support? <Required />
+                    </label>
+                    <p style={{ margin: '3px 0 10px', fontSize: '12.5px', color: '#64748b' }}>
+                      Did this activity receive financial support (e.g. registration fee reimbursement, TEQIP sponsorship, AICTE grant, college or club budget)?
+                    </p>
+                    <div style={{ display: 'flex', gap: '24px', marginTop: '6px', flexWrap: 'wrap' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13.5px', fontWeight: form.details.funded === 'Yes' ? '700' : '500', color: form.details.funded === 'Yes' ? '#1d4ed8' : '#334155' }}>
                         <input
+                          id="radio-funded-yes"
                           type="radio"
                           name="funded"
+                          value="Yes"
                           checked={form.details.funded === 'Yes'}
-                          onChange={() => setDetail('funded', 'Yes')}
-                        /> Yes
+                          onChange={() => {
+                            setDetail('funded', 'Yes');
+                            setErrors((prev) => ({ ...prev, 'details.funded': undefined }));
+                          }}
+                        />
+                        <span>Yes, Funding / Fee Support Involved</span>
                       </label>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13.5px', fontWeight: form.details.funded === 'No' ? '700' : '500', color: form.details.funded === 'No' ? '#15803d' : '#334155' }}>
                         <input
+                          id="radio-funded-no"
                           type="radio"
                           name="funded"
-                          checked={form.details.funded !== 'Yes'}
-                          onChange={() => setDetail('funded', 'No')}
-                        /> No
+                          value="No"
+                          checked={form.details.funded === 'No' || !form.details.funded}
+                          onChange={() => {
+                            setForm((prev) => ({
+                              ...prev,
+                              details: {
+                                ...prev.details,
+                                funded: 'No',
+                                fundingAgency: '',
+                                fundingAmount: ''
+                              }
+                            }));
+                            setErrors((prev) => ({
+                              ...prev,
+                              'details.funded': undefined,
+                              'details.fundingAgency': undefined,
+                              'details.fundingAmount': undefined
+                            }));
+                          }}
+                        />
+                        <span>No, Self-Funded / No Financial Support Involved</span>
                       </label>
                     </div>
+                    <FieldError message={errors['details.funded']} />
                   </div>
                 )}
 
-                {form.details.funded === 'Yes' && (
-                  <div className="form-grid two-columns">
+                {selectedType?.supportsFunding && form.details.funded === 'Yes' && (
+                  <div
+                    className="form-grid two-columns"
+                    id="form-grid-funding-details"
+                    style={{
+                      background: '#f0fdf4',
+                      padding: '14px 16px',
+                      borderRadius: '8px',
+                      border: '1.5px solid #86efac',
+                      marginTop: '6px'
+                    }}
+                  >
                     <div className="form-group">
-                      <label htmlFor="input-fund-agency">Funding Agency</label>
+                      <label htmlFor="input-fund-agency" style={{ fontWeight: '700', color: '#166534' }}>
+                        Funding Agency / Sponsor <Required />
+                      </label>
                       <input
                         id="input-fund-agency"
                         className="form-control"
                         type="text"
+                        list="agency-suggestions"
                         value={form.details.fundingAgency || ''}
                         onChange={(e) => setDetail('fundingAgency', e.target.value)}
-                        placeholder="e.g. TEQIP / AICTE / College"
+                        placeholder="Select or enter agency (e.g. TEQIP / AICTE / College / Club Budget)"
                       />
+                      <datalist id="agency-suggestions">
+                        <option value="TEQIP / College Institutional Support" />
+                        <option value="AICTE" />
+                        <option value="WCE Departmental Budget" />
+                        <option value="Student Club / Chapter Budget" />
+                        <option value="UGC" />
+                        <option value="DST" />
+                        <option value="ISTE" />
+                        <option value="Industry Sponsored" />
+                        <option value="Self-Funded / Reimbursed" />
+                        <option value="Other" />
+                      </datalist>
+                      <small style={{ color: '#475569', fontSize: '11px', display: 'block', marginTop: '3px' }}>
+                        Specify the body or scheme that provided registration fee or travel support.
+                      </small>
+                      <FieldError message={errors['details.fundingAgency']} />
                     </div>
                     <div className="form-group">
-                      <label htmlFor="input-fund-amt">Amount Funded (₹)</label>
+                      <label htmlFor="input-fund-amt" style={{ fontWeight: '700', color: '#166534' }}>
+                        Amount Funded (₹) <Required />
+                      </label>
                       <input
                         id="input-fund-amt"
                         className="form-control"
                         type="number"
-                        value={form.details.fundingAmount || ''}
+                        min="0"
+                        step="any"
+                        value={form.details.fundingAmount ?? ''}
                         onChange={(e) => setDetail('fundingAmount', e.target.value)}
-                        placeholder="e.g. 5000"
+                        placeholder="e.g. 5000 (enter 0 if waived / sponsored)"
                       />
+                      <small style={{ color: '#475569', fontSize: '11px', display: 'block', marginTop: '3px' }}>
+                        Enter amount in ₹. Enter 0 if the registration fee was completely waived or free.
+                      </small>
+                      <FieldError message={errors['details.fundingAmount']} />
                     </div>
                   </div>
                 )}
 
                 {/* Guest / Resource Persons */}
                 {selectedType?.supportsGuests && (
-                  <div className="form-group form-full">
+                  <div className="form-group form-full" id="form-group-guests">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                       <label style={{ margin: 0 }}>Guest Speakers / Resource Persons</label>
                       <button className="btn btn-secondary btn-sm" type="button" onClick={addGuest}>
@@ -1182,7 +1494,57 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
                     {form.startTime || form.endTime ? ` (${form.startTime || '--:--'} to ${form.endTime || '--:--'})` : ''}
                   </p>
                   <p style={{ margin: '0 0 6px' }}><strong>Academic Year:</strong> {form.academicYear}</p>
+                  {selectedType?.supportsFunding && (
+                    <p style={{ margin: '0 0 6px' }}>
+                      <strong>Fee Funding / Support:</strong>{' '}
+                      {form.details.funded === 'Yes' ? (
+                        <span style={{ color: '#15803d', fontWeight: '700' }}>
+                          ✓ Fee Funded ({form.details.fundingAgency || 'Agency not specified'} · ₹{form.details.fundingAmount ?? '0'})
+                        </span>
+                      ) : (
+                        <span style={{ color: '#475569', fontWeight: '500' }}>
+                          No Financial Support Involved (Self-Funded)
+                        </span>
+                      )}
+                    </p>
+                  )}
                   <p style={{ margin: 0 }}><strong>Evidence Files:</strong> {form.newAttachments.length + form.existingAttachments.length} attached ({allImages.length} photo(s))</p>
+                </div>
+
+                {/* Pre-submission readiness assessment */}
+                <div style={{
+                  background: (form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== ''))) && hasProof) ? '#f0fdf4' : '#fffbeb',
+                  border: (form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== ''))) && hasProof) ? '1px solid #86efac' : '1px solid #fde047',
+                  borderRadius: '8px',
+                  padding: '12px 14px',
+                  marginBottom: '16px',
+                  fontSize: '12.5px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{ fontWeight: '700', color: (form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== ''))) && hasProof) ? '#166534' : '#854d0e', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {(form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== ''))) && hasProof) ? '✓ Submission Verification: Ready' : '⚠️ Submission Verification: Attention Needed'}
+                    </span>
+                    <span style={{ fontSize: '11px', fontWeight: '700', color: (form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== ''))) && hasProof) ? '#15803d' : '#a16207' }}>
+                      {(form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== ''))) && hasProof) ? 'All Criteria Met' : 'Check Incomplete Items Below'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px', fontSize: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: form.title?.trim() ? '#166534' : '#dc2626', fontWeight: '600' }}>
+                      <span>{form.title?.trim() ? '✓' : '✗'}</span> Title & Category
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: form.startDate ? '#166534' : '#dc2626', fontWeight: '600' }}>
+                      <span>{form.startDate ? '✓' : '✗'}</span> Dates & Academic Year
+                    </div>
+                    {selectedType?.supportsFunding && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== '')) ? '#166534' : '#dc2626', fontWeight: '600' }}>
+                        <span>{(form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== '')) ? '✓' : '✗'}</span>
+                        Funding: {form.details.funded === 'Yes' ? 'Fee Funded' : 'No Support (Self-Funded)'}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: hasProof ? '#166534' : '#dc2626', fontWeight: '600' }}>
+                      <span>{hasProof ? '✓' : '✗'}</span> Evidence / Proof Document
+                    </div>
+                  </div>
                 </div>
 
                 <label style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', cursor: 'pointer', marginBottom: '16px', fontSize: '12px' }}>
@@ -1192,7 +1554,11 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
                     onChange={(e) => setDeclaration(e.target.checked)}
                     style={{ marginTop: '3px' }}
                   />
-                  <span>I confirm that the information provided is accurate and authentic for faculty record compilation.</span>
+                  <span>
+                    {user?.role === 'Club'
+                      ? 'I confirm that the information provided is accurate and authentic for student club / chapter records compilation.'
+                      : 'I confirm that the information provided is accurate and authentic for faculty record compilation.'}
+                  </span>
                 </label>
 
                 <div className="builder-form-actions">
