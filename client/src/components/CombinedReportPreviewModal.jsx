@@ -17,15 +17,17 @@ const CombinedReportPreviewModal = ({
   onDownloadPdf,
   downloading = false
 }) => {
-  if (!records) return null;
-
+  const safeRecords = Array.isArray(records) ? records : [];
   const token = getActiveToken();
   const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
 
-  const totalActivities = records.length;
-  const approvedCount = records.filter(r => r.workflow_status === 'Approved').length;
-  const withCertsCount = records.filter(r => (r.attachments || []).some(a => a.mimeType?.startsWith('image/') || a.kind === 'image' || a.kind === 'evidence')).length;
-  const activityTypesCount = new Set(records.map(r => r.type_name)).size;
+  const totalActivities = safeRecords.length;
+  const approvedCount = safeRecords.filter(r => r.workflow_status === 'Approved').length;
+  const withCertsCount = safeRecords.filter(r => {
+    const atts = Array.isArray(r.attachments) ? r.attachments : [];
+    return atts.some(a => a.mimeType?.startsWith('image/') || a.kind === 'image' || a.kind === 'evidence');
+  }).length;
+  const activityTypesCount = new Set(safeRecords.map(r => r.type_name)).size;
 
   const now = new Date();
   const istDateStr = now.toLocaleDateString('en-IN', {
@@ -43,8 +45,13 @@ const CombinedReportPreviewModal = ({
 
   const refCode = `WCE/CSE/RPT/2026-27/${String(totalActivities).padStart(4, '0')}`;
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
     <div
+      className="modal-overlay combined-report-modal"
       onClick={onClose}
       style={{
         position: 'fixed',
@@ -73,7 +80,18 @@ const CombinedReportPreviewModal = ({
         }}
       >
         {/* Modal Top Bar */}
-        <div style={{ background: '#14284b', color: '#fff', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+        <div
+          className="no-print"
+          style={{
+            background: '#14284b',
+            color: '#fff',
+            padding: '12px 20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexShrink: 0
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '13px', fontWeight: '700', letterSpacing: '0.5px' }}>
               Official Activity Report Preview ({totalActivities} activities)
@@ -83,13 +101,43 @@ const CombinedReportPreviewModal = ({
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handlePrint}
+              style={{
+                background: 'rgba(255,255,255,0.15)',
+                color: '#fff',
+                fontWeight: '700',
+                border: '1px solid rgba(255,255,255,0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '5px 12px',
+                borderRadius: '5px',
+                cursor: 'pointer'
+              }}
+            >
+              <Icon name="reports" size={14} /> Print / Save PDF
+            </button>
             {onDownloadPdf && (
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={onDownloadPdf}
                 disabled={downloading}
-                style={{ background: '#fff', color: '#14284b', fontWeight: '700', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 12px', borderRadius: '5px', cursor: 'pointer' }}
+                style={{
+                  background: '#fff',
+                  color: '#14284b',
+                  fontWeight: '700',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '5px 12px',
+                  borderRadius: '5px',
+                  cursor: 'pointer'
+                }}
               >
                 <Icon name="download" size={14} /> {downloading ? 'Generating PDF...' : 'Download PDF'}
               </button>
@@ -109,6 +157,7 @@ const CombinedReportPreviewModal = ({
                 alignItems: 'center',
                 justifyContent: 'center'
               }}
+              title="Close Preview"
             >
               ✕
             </button>
@@ -175,10 +224,10 @@ const CombinedReportPreviewModal = ({
             {/* Title & Subtitle */}
             <div style={{ textAlign: 'center', marginBottom: '16px' }}>
               <h2 style={{ margin: '0 0 6px', fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '17px', color: '#14284b', fontWeight: '700' }}>
-                Faculty Activity &amp; Contribution Report
+                {user?.role === 'Club' ? 'Club Activity & Contribution Report' : 'Faculty Activity & Contribution Report'}
               </h2>
               <div style={{ fontSize: '10.5px', color: '#475569', lineHeight: 1.4 }}>
-                Computer Science and Engineering · Period: {periodLabel} · Generated {istDateStr}, {istTimeStr} IST · Ref: {refCode}
+                {user?.name || user?.full_name || 'Computer Science and Engineering'} · Period: {periodLabel} · Generated {istDateStr}, {istTimeStr} IST · Ref: {refCode}
               </div>
             </div>
 
@@ -204,196 +253,224 @@ const CombinedReportPreviewModal = ({
 
             {/* Activity Cards List */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
-              {records.map((act, index) => {
-                const cardColor = getTypeColor(act.type_name);
-                const narrativeTokens = buildActivityNarrative(act);
-                const cardDate = formatNarrativeDateRange(act);
-                const cardHost = normalizeHost(act.host_organisation);
-                const cardRole = act.faculty_role || act.role || 'Participant';
-                const cardMode = act.mode || 'Online';
-                const cardLevel = act.scope || 'National';
-                const cardVenue = act.venue || (act.mode === 'Online' ? 'Online Platform' : 'WCE Sangli');
+              {safeRecords.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px', background: '#f8fafc', borderRadius: '8px', border: '1.5px dashed #cbd5e1', color: '#64748b' }}>
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px', color: '#94a3b8' }}>
+                    <Icon name="reports" size={36} />
+                  </div>
+                  <div style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b', marginBottom: '6px' }}>
+                    No Matching Activities Found
+                  </div>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#64748b', lineHeight: 1.5 }}>
+                    There are no activities matching your current filters. You can check &quot;Include records that are not approved&quot; or expand the reporting period to view more activities.
+                  </p>
+                </div>
+              ) : (
+                safeRecords.map((act, index) => {
+                  const cardColor = getTypeColor(act.type_name);
+                  const narrativeResult = buildActivityNarrative(act);
+                  const narrativeTokens = Array.isArray(narrativeResult)
+                    ? narrativeResult
+                    : (narrativeResult?.tokens || []);
+                  const cardDate = formatNarrativeDateRange(act);
+                  const cardHost = normalizeHost(act.host_organisation || act.hostOrganisation);
+                  const cardRole = act.faculty_role || act.facultyRole || act.role || 'Participant';
+                  const cardMode = act.mode || 'Online';
+                  const cardLevel = act.scope || 'National';
+                  const cardVenue = act.venue || (act.mode === 'Online' ? 'Online Platform' : 'WCE Sangli');
 
-                const atts = act.attachments || [];
-                const primaryImage = atts.find(a => a.isPrimary && (a.mimeType?.startsWith('image/') || a.kind === 'image'))
-                  || atts.find(a => (a.kind === 'evidence' || a.fileName?.toLowerCase().includes('cert')) && a.mimeType?.startsWith('image/'))
-                  || atts.find(a => a.mimeType?.startsWith('image/') || a.kind === 'image')
-                  || null;
+                  const atts = Array.isArray(act.attachments) ? act.attachments : [];
+                  const primaryImage = atts.find(a => a.isPrimary && (a.mimeType?.startsWith('image/') || a.kind === 'image'))
+                    || atts.find(a => (a.kind === 'evidence' || a.fileName?.toLowerCase().includes('cert')) && a.mimeType?.startsWith('image/'))
+                    || atts.find(a => a.mimeType?.startsWith('image/') || a.kind === 'image')
+                    || null;
 
-                const otherImages = atts.filter(a => (a.mimeType?.startsWith('image/') || a.kind === 'image') && a !== primaryImage);
+                  const otherImages = atts.filter(a => (a.mimeType?.startsWith('image/') || a.kind === 'image') && a !== primaryImage);
 
-                let imageCaption = 'Certificate of Completion';
-                const actTypeLower = (act.type_name || '').toLowerCase();
-                if (primaryImage?.caption) {
-                  imageCaption = primaryImage.caption;
-                } else if (actTypeLower.includes('research') || actTypeLower.includes('publication')) {
-                  imageCaption = 'Certificate of Appreciation';
-                } else if (actTypeLower.includes('fdp') || actTypeLower.includes('seminar') || actTypeLower.includes('conference')) {
-                  imageCaption = 'Certificate of Participation';
-                } else if (actTypeLower.includes('visit') || primaryImage?.kind === 'image') {
-                  imageCaption = 'Event Photograph';
-                }
+                  let imageCaption = 'Certificate of Completion';
+                  const actTypeLower = (act.type_name || '').toLowerCase();
+                  if (primaryImage?.caption) {
+                    imageCaption = primaryImage.caption;
+                  } else if (actTypeLower.includes('research') || actTypeLower.includes('publication')) {
+                    imageCaption = 'Certificate of Appreciation';
+                  } else if (actTypeLower.includes('fdp') || actTypeLower.includes('seminar') || actTypeLower.includes('conference')) {
+                    imageCaption = 'Certificate of Participation';
+                  } else if (actTypeLower.includes('visit') || primaryImage?.kind === 'image') {
+                    imageCaption = 'Event Photograph';
+                  }
 
-                const cardImageUrl = primaryImage
-                  ? `/api/activity/${act.act_id}/attachments/${primaryImage.id}${tokenQuery}`
-                  : null;
+                  const cardImageUrl = primaryImage
+                    ? `/api/activity/${act.act_id}/attachments/${primaryImage.id}${tokenQuery}`
+                    : null;
 
-                return (
-                  <div
-                    key={act.act_id || index}
-                    style={{
-                      border: '1px solid #e2e8f0',
-                      borderLeft: `4px solid ${cardColor}`,
-                      borderRadius: '8px',
-                      padding: '14px 16px',
-                      background: '#fff',
-                      position: 'relative',
-                      pageBreakInside: 'avoid'
-                    }}
-                  >
-                    {/* Top Row: Sr No circle, Type chip, Date, Approved tick */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div
-                          style={{
-                            width: '26px',
-                            height: '26px',
-                            borderRadius: '50%',
-                            background: cardColor,
-                            color: '#fff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '11px',
-                            fontWeight: '700',
-                            flexShrink: 0
-                          }}
-                        >
-                          {String(index + 1).padStart(2, '0')}
-                        </div>
-                        <span
-                          style={{
-                            background: cardColor,
-                            color: '#fff',
-                            padding: '3px 8px',
-                            borderRadius: '4px',
-                            fontSize: '9.5px',
-                            fontWeight: '700',
-                            letterSpacing: '0.4px',
-                            textTransform: 'uppercase'
-                          }}
-                        >
-                          {act.type_name}
-                        </span>
-                        <span style={{ fontSize: '12px', fontWeight: '700', color: '#1e293b' }}>
-                          {cardDate}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#15803d', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        ✓ Approved by HOD
-                      </div>
-                    </div>
+                  const facultyDisplay = formatFacultyNameWithSalutation(act);
 
-                    {/* Side-by-side: Details column & Media column (~58mm / 220px) */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: '16px', alignItems: 'start' }}>
-                      {/* Left Details Column */}
-                      <div>
-                        {/* Narrative Paragraph with bold navy highlights */}
-                        <div style={{ fontSize: '12px', lineHeight: 1.5, color: '#334155', textAlign: 'justify', marginBottom: '12px' }}>
-                          {narrativeTokens.map((t, idx) => (
-                            <span key={idx} style={{ fontWeight: t.bold ? '700' : '400', color: t.bold ? '#14284b' : 'inherit' }}>
-                              {t.text}
-                            </span>
-                          ))}
-                        </div>
-
-                        {/* Detail Grid: Role, Mode Level, Host, Venue */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px 14px', fontSize: '11px', background: '#f8fafc', padding: '10px 12px', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
-                          <div>
-                            <div style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', letterSpacing: '0.5px' }}>ROLE</div>
-                            <div style={{ fontWeight: '600', color: '#1e293b', marginTop: '1px' }}>{cardRole}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', letterSpacing: '0.5px' }}>MODE · LEVEL</div>
-                            <div style={{ fontWeight: '600', color: '#1e293b', marginTop: '1px' }}>{cardMode} · {cardLevel}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', letterSpacing: '0.5px' }}>HOST / ORGANISER</div>
-                            <div style={{ fontWeight: '600', color: '#1e293b', marginTop: '1px' }}>{cardHost}</div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', letterSpacing: '0.5px' }}>VENUE</div>
-                            <div style={{ fontWeight: '600', color: '#1e293b', marginTop: '1px' }}>{cardVenue}</div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right Media Column (~58mm wide) */}
-                      <div>
-                        {cardImageUrl ? (
-                          <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '5px', background: '#fff', textAlign: 'center' }}>
-                            <img
-                              src={cardImageUrl}
-                              alt={imageCaption}
-                              style={{ width: '100%', height: '140px', objectFit: 'contain', background: '#f8fafc', borderRadius: '4px', display: 'block' }}
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                                if (e.currentTarget.nextSibling) {
-                                  e.currentTarget.nextSibling.style.display = 'block';
-                                }
-                              }}
-                            />
-                            <div style={{ fontSize: '9.5px', color: '#64748b', fontStyle: 'italic', marginTop: '5px' }}>
-                              {imageCaption}
-                            </div>
-                            {/* Thumbnails if extra images exist */}
-                            {otherImages.length > 0 && (
-                              <div style={{ display: 'flex', gap: '4px', marginTop: '6px', justifyContent: 'center', alignItems: 'center' }}>
-                                {otherImages.slice(0, 2).map((oi, oidx) => (
-                                  <img
-                                    key={oidx}
-                                    src={`/api/activity/${act.act_id}/attachments/${oi.id}${tokenQuery}`}
-                                    alt="Thumbnail"
-                                    style={{ width: '38px', height: '28px', objectFit: 'cover', borderRadius: '3px', border: '1px solid #cbd5e1' }}
-                                  />
-                                ))}
-                                {otherImages.length > 2 && (
-                                  <span style={{ fontSize: '9px', color: '#64748b', fontWeight: '700' }}>
-                                    +{otherImages.length - 2} more
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
+                  return (
+                    <div
+                      key={act.act_id || index}
+                      style={{
+                        border: '1px solid #e2e8f0',
+                        borderLeft: `4px solid ${cardColor}`,
+                        borderRadius: '8px',
+                        padding: '14px 16px',
+                        background: '#fff',
+                        position: 'relative',
+                        pageBreakInside: 'avoid'
+                      }}
+                    >
+                      {/* Top Row: Sr No circle, Type chip, Date, Faculty Name, Approved tick */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                           <div
                             style={{
-                              border: '1.5px dashed #cbd5e1',
-                              borderRadius: '6px',
-                              height: '140px',
+                              width: '26px',
+                              height: '26px',
+                              borderRadius: '50%',
+                              background: cardColor,
+                              color: '#fff',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              padding: '12px',
-                              textAlign: 'center',
-                              color: '#94a3b8',
-                              fontSize: '10.5px',
-                              fontStyle: 'italic',
-                              lineHeight: 1.4,
-                              background: '#fcfdfe'
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              flexShrink: 0
                             }}
                           >
-                            No certificate or photo uploaded for this activity
+                            {String(index + 1).padStart(2, '0')}
                           </div>
-                        )}
+                          <span
+                            style={{
+                              background: cardColor,
+                              color: '#fff',
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              fontSize: '9.5px',
+                              fontWeight: '700',
+                              letterSpacing: '0.4px',
+                              textTransform: 'uppercase'
+                            }}
+                          >
+                            {act.type_name}
+                          </span>
+                          <span style={{ fontSize: '12px', fontWeight: '700', color: '#1e293b' }}>
+                            {cardDate}
+                          </span>
+                          {facultyDisplay && facultyDisplay !== 'Faculty Member' && (
+                            <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>
+                              · {facultyDisplay}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '11px', color: act.workflow_status === 'Approved' ? '#15803d' : '#b45309', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {act.workflow_status === 'Approved' ? '✓ Approved by HOD' : `Status: ${act.workflow_status || 'Draft'}`}
+                        </div>
+                      </div>
+
+                      {/* Side-by-side: Details column & Media column (~58mm / 220px) */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: '16px', alignItems: 'start' }}>
+                        {/* Left Details Column */}
+                        <div>
+                          {/* Narrative Paragraph with bold navy highlights */}
+                          <div style={{ fontSize: '12px', lineHeight: 1.5, color: '#334155', textAlign: 'justify', marginBottom: '12px' }}>
+                            {narrativeTokens.length > 0 ? (
+                              narrativeTokens.map((t, idx) => (
+                                <span key={idx} style={{ fontWeight: t.bold ? '700' : '400', color: t.bold ? '#14284b' : 'inherit' }}>
+                                  {t.text}
+                                </span>
+                              ))
+                            ) : (
+                              <span>{act.title || 'Academic Activity'}</span>
+                            )}
+                          </div>
+
+                          {/* Detail Grid: Role, Mode Level, Host, Venue */}
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px 14px', fontSize: '11px', background: '#f8fafc', padding: '10px 12px', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
+                            <div>
+                              <div style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', letterSpacing: '0.5px' }}>ROLE</div>
+                              <div style={{ fontWeight: '600', color: '#1e293b', marginTop: '1px' }}>{cardRole}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', letterSpacing: '0.5px' }}>MODE · LEVEL</div>
+                              <div style={{ fontWeight: '600', color: '#1e293b', marginTop: '1px' }}>{cardMode} · {cardLevel}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', letterSpacing: '0.5px' }}>HOST / ORGANISER</div>
+                              <div style={{ fontWeight: '600', color: '#1e293b', marginTop: '1px' }}>{cardHost}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', letterSpacing: '0.5px' }}>VENUE</div>
+                              <div style={{ fontWeight: '600', color: '#1e293b', marginTop: '1px' }}>{cardVenue}</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right Media Column (~58mm wide) */}
+                        <div>
+                          {cardImageUrl ? (
+                            <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', padding: '5px', background: '#fff', textAlign: 'center' }}>
+                              <img
+                                src={cardImageUrl}
+                                alt={imageCaption}
+                                style={{ width: '100%', height: '140px', objectFit: 'contain', background: '#f8fafc', borderRadius: '4px', display: 'block' }}
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  if (e.currentTarget.nextSibling) {
+                                    e.currentTarget.nextSibling.style.display = 'block';
+                                  }
+                                }}
+                              />
+                              <div style={{ fontSize: '9.5px', color: '#64748b', fontStyle: 'italic', marginTop: '5px' }}>
+                                {imageCaption}
+                              </div>
+                              {/* Thumbnails if extra images exist */}
+                              {otherImages.length > 0 && (
+                                <div style={{ display: 'flex', gap: '4px', marginTop: '6px', justifyContent: 'center', alignItems: 'center' }}>
+                                  {otherImages.slice(0, 2).map((oi, oidx) => (
+                                    <img
+                                      key={oidx}
+                                      src={`/api/activity/${act.act_id}/attachments/${oi.id}${tokenQuery}`}
+                                      alt="Thumbnail"
+                                      style={{ width: '38px', height: '28px', objectFit: 'cover', borderRadius: '3px', border: '1px solid #cbd5e1' }}
+                                    />
+                                  ))}
+                                  {otherImages.length > 2 && (
+                                    <span style={{ fontSize: '9px', color: '#64748b', fontWeight: '700' }}>
+                                      +{otherImages.length - 2} more
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div
+                              style={{
+                                border: '1.5px dashed #cbd5e1',
+                                borderRadius: '6px',
+                                height: '140px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '12px',
+                                textAlign: 'center',
+                                color: '#94a3b8',
+                                fontSize: '10.5px',
+                                fontStyle: 'italic',
+                                lineHeight: 1.4,
+                                background: '#fcfdfe'
+                              }}
+                            >
+                              No certificate or photo uploaded for this activity
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
 
-            {/* ONLY HOD Signature block at bottom right (NO Faculty Coordinator) */}
+            {/* ONLY HOD Signature block at bottom right */}
             <div style={{ marginTop: '28px', paddingTop: '16px', borderTop: '1px solid #cbd5e1', display: 'flex', justifyContent: 'flex-end' }}>
               <div style={{ textAlign: 'center', minWidth: '220px' }}>
                 <div style={{ fontSize: '11.5px', fontWeight: '700', color: '#14284b', marginBottom: '32px' }}>

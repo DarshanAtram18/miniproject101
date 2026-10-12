@@ -190,7 +190,7 @@ const SummaryViewModal = ({ activity, onClose, onDownload, downloading, user, sh
                 Faculty Activity &amp; Contribution Report
               </h2>
               <div style={{ fontSize: '9.5px', color: '#64748b', marginTop: '4px' }}>
-                {activity.department || 'Computer Science and Engineering'} · Period: {activity.acad_year || '2026-27'} · Generated {istDateStr}, {istTimeStr} IST · Ref: {refCode}
+                {facultyName} · {activity.department || 'Computer Science and Engineering'} · Period: {activity.acad_year || '2026-27'} · Generated {istDateStr}, {istTimeStr} IST · Ref: {refCode}
               </div>
             </div>
 

@@ -26,7 +26,6 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
     includePending: false
   });
   const [downloading, setDownloading] = useState('');
-  const [appreciationDownloading, setAppreciationDownloading] = useState(false);
   const [showCombinedPreviewModal, setShowCombinedPreviewModal] = useState(false);
 
   const activityTypes = catalog.typeGroups.flatMap((group) => group.types.map((type) => type.name));
