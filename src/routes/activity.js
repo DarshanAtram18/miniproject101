@@ -502,7 +502,8 @@ router.delete('/:activityId', async (req, res) => {
   const activityId = Number(req.params.activityId)
   const existing = await getActivityById(activityId)
   if (!existing) return res.status(404).json({ error: 'Activity not found.' })
-  const isOwner = Number(existing.staff_id) === Number(req.user.id)
+  const isOwner = Number(existing.staff_id) === Number(req.user.id) ||
+    Boolean(existing.staff_name && req.user.name && existing.staff_name.toLowerCase().trim() === req.user.name.toLowerCase().trim())
   const isHodOrAdmin = req.user.role === 'HOD' || req.user.role === 'Admin'
   if (!isOwner && !isHodOrAdmin) {
     return res.status(403).json({ error: 'Only the submitting faculty member or department head can remove this activity.' })

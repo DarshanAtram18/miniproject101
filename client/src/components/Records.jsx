@@ -240,7 +240,7 @@ const Records = ({
                 <thead><tr>{isReviewer && <th>Faculty</th>}<th>Date</th><th>Activity</th><th>Type &amp; role</th><th>Status</th><th><span className="visually-hidden">Actions</span></th></tr></thead>
                 <tbody>
                   {records.map((record) => {
-                    const isOwner = Number(record.staff_id) === Number(user.id);
+                    const isOwner = Number(record.staff_id) === Number(user.id) || Boolean(record.staff_name && user.name && record.staff_name.toLowerCase().trim() === user.name.toLowerCase().trim());
                     return (
                       <tr key={record.act_id}>
                         {isReviewer && <td data-label="Faculty"><strong className="table-primary">{record.staff_name}</strong><span className="table-secondary">{record.department}</span></td>}
@@ -337,7 +337,7 @@ const Records = ({
                   <Icon name="edit" size={17} /> Edit Activity
                 </button>
               )}
-              {(Number(viewedRecord.staff_id) === Number(user.id) || isHod) && (
+              {(Number(viewedRecord.staff_id) === Number(user.id) || Boolean(viewedRecord.staff_name && user.name && viewedRecord.staff_name.toLowerCase().trim() === user.name.toLowerCase().trim()) || isHod) && (
                 <button
                   className="btn btn-secondary"
                   type="button"
