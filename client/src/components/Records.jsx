@@ -276,7 +276,7 @@ const Records = ({
                               </button>
                             ) : null}
                             {isOwner && editableStatuses.has(record.workflow_status) && <button className="icon-button" type="button" onClick={() => onEdit(record)} aria-label={`Edit ${record.title}`} title="Edit"><Icon name="edit" size={18} /></button>}
-                            {isOwner && editableStatuses.has(record.workflow_status) && <button className="icon-button danger" type="button" onClick={() => requestDelete(record)} aria-label={`Remove ${record.title}`} title="Remove"><Icon name="trash" size={18} /></button>}
+                            {(isOwner || isHod) && <button className="icon-button danger" type="button" onClick={() => requestDelete(record)} aria-label={`Delete ${record.title}`} title="Delete this activity"><Icon name="trash" size={18} /></button>}
                           </div>
                         </td>
                       </tr>
@@ -335,6 +335,16 @@ const Records = ({
               {Number(viewedRecord.staff_id) === Number(user.id) && editableStatuses.has(viewedRecord.workflow_status) && (
                 <button className="btn btn-primary" type="button" onClick={() => { closeRecord(); onEdit(viewedRecord); }}>
                   <Icon name="edit" size={17} /> Edit Activity
+                </button>
+              )}
+              {(Number(viewedRecord.staff_id) === Number(user.id) || isHod) && (
+                <button
+                  className="btn btn-secondary"
+                  type="button"
+                  style={{ color: '#b91c1c', borderColor: '#fca5a5', background: '#fef2f2' }}
+                  onClick={() => { closeRecord(); requestDelete(viewedRecord); }}
+                >
+                  <Icon name="trash" size={16} /> Delete Activity
                 </button>
               )}
             </>

@@ -502,11 +502,10 @@ router.delete('/:activityId', async (req, res) => {
   const activityId = Number(req.params.activityId)
   const existing = await getActivityById(activityId)
   if (!existing) return res.status(404).json({ error: 'Activity not found.' })
-  if (Number(existing.staff_id) !== Number(req.user.id)) {
-    return res.status(403).json({ error: 'Only the submitting faculty member can remove this activity.' })
-  }
-  if (!editableStatuses.has(existing.workflow_status)) {
-    return res.status(409).json({ error: 'Approved activities cannot be removed directly. Request a correction from the reviewer.' })
+  const isOwner = Number(existing.staff_id) === Number(req.user.id)
+  const isHodOrAdmin = req.user.role === 'HOD' || req.user.role === 'Admin'
+  if (!isOwner && !isHodOrAdmin) {
+    return res.status(403).json({ error: 'Only the submitting faculty member or department head can remove this activity.' })
   }
 
   const note = String(req.body?.note || 'Removed by submitting faculty').trim().slice(0, 1000)

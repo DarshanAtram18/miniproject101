@@ -17,3 +17,4 @@ WHERE role NOT IN ('HOD', 'Club', 'Faculty');
 UPDATE users
 SET role = 'HOD'
 WHERE LOWER(email) = 'hod.cse@wce.ac.in';
+

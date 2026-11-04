@@ -71,6 +71,48 @@ async function fetchHodSignature(department) {
   }
 }
 
+// Parse width and height from PNG or JPEG image buffers to preserve exact aspect ratio
+function getImageDimensions(buffer) {
+  if (!buffer) return null
+  let buf = buffer
+  if (typeof buf === 'string') {
+    if (buf.startsWith('data:')) {
+      buf = Buffer.from(buf.split(',')[1], 'base64')
+    } else {
+      buf = Buffer.from(buf, 'base64')
+    }
+  }
+  if (!Buffer.isBuffer(buf) || buf.length < 8) return null
+
+  // PNG: signature 89 50 4E 47 0D 0A 1A 0A
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) {
+    if (buf.length >= 24) {
+      return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) }
+    }
+  }
+
+  // JPEG: starts with FF D8
+  if (buf[0] === 0xFF && buf[1] === 0xD8) {
+    let offset = 2
+    while (offset < buf.length - 8) {
+      if (buf[offset] !== 0xFF) { offset++; continue }
+      const marker = buf[offset + 1]
+      if (
+        (marker >= 0xC0 && marker <= 0xC3) ||
+        (marker >= 0xC5 && marker <= 0xC7) ||
+        (marker >= 0xC9 && marker <= 0xCB) ||
+        (marker >= 0xCD && marker <= 0xCF)
+      ) {
+        return { height: buf.readUInt16BE(offset + 5), width: buf.readUInt16BE(offset + 7) }
+      }
+      const length = buf.readUInt16BE(offset + 2)
+      offset += 2 + length
+    }
+  }
+
+  return null
+}
+
 const humanize = (value = '') => value
   .replace(/([A-Z])/g, ' $1')
   .replace(/[_-]+/g, ' ')
@@ -966,6 +1008,8 @@ async function generateActivitySummaryPdf(activity, generatedBy) {
 // ─────────────────────────────────────────────────────────────
 async function generateDocx(records, metadata) {
   await attachMediaToRecords(records)
+  const dept = (metadata && metadata.department) ? metadata.department : 'Computer Science and Engineering'
+  const hodSignatureBase64 = await fetchHodSignature(dept)
 
   const summary = summarize(records)
 
@@ -1169,7 +1213,7 @@ async function generateDocx(records, metadata) {
       tableHeader: true,
       children: [
         new TableCell({
-          width: { size: 850, type: WidthType.DXA },
+          width: { size: 700, type: WidthType.DXA },
           shading: { fill: BRAND_NAVY },
           borders: {
             top: { style: BorderStyle.SINGLE, size: 4, color: BRAND_NAVY },
@@ -1185,7 +1229,7 @@ async function generateDocx(records, metadata) {
           ]
         }),
         new TableCell({
-          width: { size: 5850, type: WidthType.DXA },
+          width: { size: 5800, type: WidthType.DXA },
           shading: { fill: BRAND_NAVY },
           borders: {
             top: { style: BorderStyle.SINGLE, size: 4, color: BRAND_NAVY },
@@ -1201,7 +1245,7 @@ async function generateDocx(records, metadata) {
           ]
         }),
         new TableCell({
-          width: { size: 2800, type: WidthType.DXA },
+          width: { size: 3300, type: WidthType.DXA },
           shading: { fill: BRAND_NAVY },
           borders: {
             top: { style: BorderStyle.SINGLE, size: 4, color: BRAND_NAVY },
@@ -1286,28 +1330,45 @@ async function generateDocx(records, metadata) {
       })
     ]
 
-    // Build Photo Cell Paragraphs
+    // Build Photo Cell Paragraphs (with aspect ratio preservation so certificates never look stretched or tiny)
     const photoParagraphs = []
     if (record.reportMedia?.hasMedia && record.reportMedia.mainImage) {
       try {
+        const imgBuffer = record.reportMedia.mainImage
+        const dims = getImageDimensions(imgBuffer)
+        const maxW = 215
+        const maxH = 150
+        let targetW = maxW
+        let targetH = 135
+        if (dims && dims.width > 0 && dims.height > 0) {
+          const aspect = dims.width / dims.height
+          if (aspect >= maxW / maxH) {
+            targetW = maxW
+            targetH = Math.max(65, Math.min(maxH, Math.round(maxW / aspect)))
+          } else {
+            targetH = maxH
+            targetW = Math.max(65, Math.min(maxW, Math.round(maxH * aspect)))
+          }
+        }
         photoParagraphs.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
+            spacing: { before: 60, after: 30 },
             children: [
               new ImageRun({
-                data: record.reportMedia.mainImage,
-                transformation: { width: 170, height: 115 }
+                data: imgBuffer,
+                transformation: { width: targetW, height: targetH }
               })
             ]
           }),
           new Paragraph({
             alignment: AlignmentType.CENTER,
-            spacing: { before: 40 },
+            spacing: { before: 20, after: 40 },
             children: [
               new TextRun({
                 text: record.reportMedia.caption || 'Certificate of Completion',
                 italics: true,
-                size: 15,
+                size: 16,
                 color: '64748B'
               })
             ]
@@ -1317,6 +1378,7 @@ async function generateDocx(records, metadata) {
         photoParagraphs.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
+            spacing: { before: 100, after: 100 },
             children: [
               new TextRun({
                 text: 'Certificate on file in repository',
@@ -1332,6 +1394,7 @@ async function generateDocx(records, metadata) {
       photoParagraphs.push(
         new Paragraph({
           alignment: AlignmentType.CENTER,
+          spacing: { before: 100, after: 100 },
           children: [
             new TextRun({
               text: 'No certificate or photo\nuploaded for this activity',
@@ -1348,7 +1411,7 @@ async function generateDocx(records, metadata) {
       new TableRow({
         children: [
           new TableCell({
-            width: { size: 850, type: WidthType.DXA },
+            width: { size: 700, type: WidthType.DXA },
             borders: rowBorders,
             shading: { fill: 'F8FAFC' },
             children: [
@@ -1366,12 +1429,12 @@ async function generateDocx(records, metadata) {
             ]
           }),
           new TableCell({
-            width: { size: 5850, type: WidthType.DXA },
+            width: { size: 5800, type: WidthType.DXA },
             borders: rowBorders,
             children: detailsParagraphs
           }),
           new TableCell({
-            width: { size: 2800, type: WidthType.DXA },
+            width: { size: 3300, type: WidthType.DXA },
             borders: rowBorders,
             shading: { fill: 'FAFAFA' },
             children: photoParagraphs
@@ -1384,17 +1447,95 @@ async function generateDocx(records, metadata) {
   docChildren.push(
     new Table({
       rows: tableRows,
-      width: { size: 9500, type: WidthType.DXA }
-    }),
-    new Paragraph({ spacing: { before: 280 } }),
+      width: { size: 9800, type: WidthType.DXA }
+    })
+  )
+
+  // HOD Signature Block: digital signature image (if present), signature line STRICTLY ABOVE HOD name & title
+  if (hodSignatureBase64) {
+    try {
+      const sigBuffer = hodSignatureBase64.startsWith('data:')
+        ? Buffer.from(hodSignatureBase64.split(',')[1], 'base64')
+        : Buffer.from(hodSignatureBase64, 'base64')
+      const sigDims = getImageDimensions(sigBuffer)
+      let sigW = 120
+      let sigH = 38
+      if (sigDims && sigDims.width > 0 && sigDims.height > 0) {
+        const aspect = sigDims.width / sigDims.height
+        sigH = 38
+        sigW = Math.round(38 * aspect)
+      }
+      docChildren.push(
+        new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          spacing: { before: 240, after: 40 },
+          children: [
+            new ImageRun({
+              data: sigBuffer,
+              transformation: { width: Math.min(sigW, 160), height: sigH }
+            })
+          ]
+        })
+      )
+    } catch {}
+  }
+
+  docChildren.push(
     new Paragraph({
       alignment: AlignmentType.RIGHT,
+      spacing: { before: hodSignatureBase64 ? 40 : 360, after: 60 },
       children: [
         new TextRun({
-          text: '_____________________________________\nHead of Department\n(Dr. A. R. Surve)\nProfessor & Head, CSE\nWalchand College of Engineering, Sangli',
+          text: '_______________________________________',
           bold: true,
           size: 18,
           color: BRAND_NAVY
+        })
+      ]
+    }),
+    new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      spacing: { after: 30 },
+      children: [
+        new TextRun({
+          text: 'Head of Department',
+          bold: true,
+          size: 19,
+          color: BRAND_NAVY
+        })
+      ]
+    }),
+    new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      spacing: { after: 30 },
+      children: [
+        new TextRun({
+          text: '(Dr. A. R. Surve)',
+          bold: true,
+          size: 19,
+          color: BRAND_NAVY
+        })
+      ]
+    }),
+    new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      spacing: { after: 30 },
+      children: [
+        new TextRun({
+          text: 'Professor & Head, Department of CSE',
+          size: 17,
+          color: '475569'
+        })
+      ]
+    }),
+    new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      spacing: { after: 80 },
+      children: [
+        new TextRun({
+          text: 'Walchand College of Engineering, Sangli',
+          size: 17,
+          color: '475569'
         })
       ]
     })
