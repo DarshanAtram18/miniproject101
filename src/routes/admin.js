@@ -424,6 +424,8 @@ router.delete('/users/:userId', async (req, res) => {
     return res.status(400).json({ error: 'You cannot remove your own administrative account.' })
   }
 
+  const reassignTo = req.query.reassignTo ? Number(req.query.reassignTo) : null
+
   try {
     const userResult = await pool.query('SELECT id, name, email FROM users WHERE id = $1', [targetId])
     if (userResult.rowCount === 0) {
@@ -431,15 +433,24 @@ router.delete('/users/:userId', async (req, res) => {
     }
     const targetUser = userResult.rows[0]
 
+    if (reassignTo) {
+      await pool.query('UPDATE activity SET staff_id = $1 WHERE staff_id = $2', [reassignTo, targetId])
+    }
+
     const actResult = await pool.query('SELECT COUNT(*)::int AS count FROM activity WHERE staff_id = $1', [targetId])
     const count = actResult.rows[0]?.count || 0
 
-    if (count > 0) {
+    if (count > 0 && !req.query.force) {
       await pool.query('UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id = $1', [targetId])
       return res.json({
         message: `${targetUser.name} has ${count} recorded activities. Account has been deactivated to preserve institutional audit trails.`
       })
     } else {
+      if (req.query.force && count > 0) {
+        await pool.query('DELETE FROM activity_attachments WHERE activity_id IN (SELECT act_id FROM activity WHERE staff_id = $1)', [targetId])
+        await pool.query('DELETE FROM activity_reviews WHERE activity_id IN (SELECT act_id FROM activity WHERE staff_id = $1)', [targetId])
+        await pool.query('DELETE FROM activity WHERE staff_id = $1', [targetId])
+      }
       await pool.query('DELETE FROM users WHERE id = $1', [targetId])
       return res.json({ message: `Account for ${targetUser.name} (${targetUser.email}) removed permanently.` })
     }

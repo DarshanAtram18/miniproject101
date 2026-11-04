@@ -20,6 +20,17 @@ const departments = [
   'Institutional / Student Activities'
 ];
 
+const formatUserDisplayName = (u) => {
+  if (!u) return '';
+  if (u.role === 'Club' || u.role === 'Admin') return u.name;
+  if (!u.salutation) return u.name;
+  const prefixes = ['Dr.', 'Prof.', 'Mr.', 'Mrs.', 'Ms.'];
+  for (const p of prefixes) {
+    if (u.name.startsWith(p)) return u.name;
+  }
+  return `${u.salutation} ${u.name}`;
+};
+
 const UserManagement = ({ user, showNotification }) => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -291,7 +302,7 @@ const UserManagement = ({ user, showNotification }) => {
                           {u.name?.charAt(0)?.toUpperCase() || 'U'}
                         </div>
                         <div>
-                          <strong className="table-primary">{(u.salutation && u.role !== 'Club' && u.role !== 'Admin') ? `${u.salutation} ` : ''}{u.name}</strong>
+                          <strong className="table-primary">{formatUserDisplayName(u)}</strong>
                           {Number(u.id) === Number(user.id) && (
                             <span style={{ fontSize: '10.5px', color: '#2563eb', fontWeight: 700, marginLeft: '6px' }}>(You)</span>
                           )}
