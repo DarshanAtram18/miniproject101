@@ -125,14 +125,20 @@ app.use((error, req, res, next) => {
 })
 
 const { startEmailWorker, stopEmailWorker } = require('./services/emailWorker')
+const { runMigrations } = require('./db/migrate')
 
-const server = app.listen(port, () => {
-  console.log(`WCE Prof-Insights running on port ${port}`)
-  if (!process.env.JWT_SECRET) console.warn('WARNING: JWT_SECRET is not configured.')
-  if (process.env.DISABLE_EMAIL_WORKER !== 'true') {
-    startEmailWorker({ intervalMs: Number(process.env.EMAIL_WORKER_POLL_INTERVAL_MS || 5000) })
-  }
-})
+let server
+runMigrations(false)
+  .catch((err) => console.error('Startup migration error:', err.message))
+  .then(() => {
+    server = app.listen(port, () => {
+      console.log(`WCE Prof-Insights running on port ${port}`)
+      if (!process.env.JWT_SECRET) console.warn('WARNING: JWT_SECRET is not configured.')
+      if (process.env.DISABLE_EMAIL_WORKER !== 'true') {
+        startEmailWorker({ intervalMs: Number(process.env.EMAIL_WORKER_POLL_INTERVAL_MS || 5000) })
+      }
+    })
+  })
 
 const shutdown = (signal) => {
   console.log(`${signal} received; closing server.`)

@@ -6,7 +6,7 @@ const pool = require('./pool')
 
 const migrationsDir = path.join(__dirname, '../../migrations')
 
-async function migrate() {
+async function runMigrations(closePool = false) {
   const client = await pool.connect()
 
   try {
@@ -50,12 +50,18 @@ async function migrate() {
     process.stdout.write('Database is up to date.\n')
   } finally {
     client.release()
-    await pool.end()
+    if (closePool) {
+      await pool.end()
+    }
   }
 }
 
-migrate().catch((error) => {
-  console.error('Migration failed:', error.message)
-  process.exitCode = 1
-})
+if (require.main === module) {
+  runMigrations(true).catch((error) => {
+    console.error('Migration failed:', error.message)
+    process.exitCode = 1
+  })
+}
+
+module.exports = { runMigrations }
 
