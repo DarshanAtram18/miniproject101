@@ -1,5 +1,6 @@
 const router = require('express').Router()
 const pool = require('../db/pool')
+const bcrypt = require('bcrypt')
 const { isLoggedIn, isReviewer } = require('../middleware/auth')
 const { listActivities, getActivityById, canAccessActivity } = require('../services/activityService')
 const { sendActivityApprovedEmail, sendChangesRequestedEmail } = require('../services/emailService')
@@ -248,6 +249,249 @@ router.post('/email-queue-retry', async (req, res) => {
   } catch (error) {
     console.error('Email queue retry error:', error)
     return res.status(500).json({ error: error.message })
+  }
+})
+
+
+// ─────────────────────────────────────────────────────────────
+// USER MANAGEMENT ENDPOINTS (SYSTEM ADMINISTRATOR ONLY)
+// ─────────────────────────────────────────────────────────────
+
+router.get('/users', async (req, res) => {
+  if (req.user.role !== 'Admin') {
+    return res.status(403).json({ error: 'Only a System Administrator can access the user directory.' })
+  }
+
+  try {
+    const result = await pool.query(`
+      SELECT
+        u.id,
+        u.email,
+        u.name,
+        u.salutation,
+        u.department,
+        u.designation,
+        u.role,
+        u.is_active,
+        u.created_at,
+        u.updated_at,
+        COUNT(a.act_id) FILTER (WHERE a.deleted_at IS NULL)::int AS activity_count
+      FROM users u
+      LEFT JOIN activity a ON a.staff_id = u.id
+      GROUP BY u.id
+      ORDER BY
+        (CASE u.role WHEN 'Admin' THEN 1 WHEN 'HOD' THEN 2 WHEN 'Faculty' THEN 3 ELSE 4 END),
+        u.name ASC
+    `)
+    return res.json({ users: result.rows })
+  } catch (error) {
+    console.error('Admin users list error:', error)
+    return res.status(500).json({ error: 'Unable to load user accounts.' })
+  }
+})
+
+router.post('/users', async (req, res) => {
+  if (req.user.role !== 'Admin') {
+    return res.status(403).json({ error: 'Only a System Administrator can create new user accounts.' })
+  }
+
+  const email = String(req.body.email || '').trim().toLowerCase()
+  const name = String(req.body.name || '').trim()
+  const salutation = String(req.body.salutation || '').trim()
+  const department = String(req.body.department || 'Computer Science and Engineering').trim()
+  const designation = String(req.body.designation || 'Assistant Professor').trim()
+  const role = String(req.body.role || 'Faculty').trim()
+  const password = String(req.body.password || '123').trim()
+
+  if (!email || !name) {
+    return res.status(400).json({ error: 'Both name and institutional email / username are required.' })
+  }
+
+  const allowedRoles = ['Faculty', 'HOD', 'Club', 'Admin']
+  if (!allowedRoles.includes(role)) {
+    return res.status(400).json({ error: `Role must be one of: ${allowedRoles.join(', ')}` })
+  }
+
+  try {
+    const existing = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email])
+    if (existing.rowCount > 0) {
+      return res.status(409).json({ error: `An account with email or username "${email}" already exists.` })
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10)
+    const result = await pool.query(
+      `INSERT INTO users (email, password, name, salutation, department, designation, role, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE)
+       RETURNING id, email, name, salutation, department, designation, role, is_active, created_at`,
+      [email, passwordHash, name, salutation || null, department, designation, role]
+    )
+
+    return res.status(201).json({ user: result.rows[0], message: `Account for ${name} (${email}) created successfully.` })
+  } catch (error) {
+    console.error('Admin create user error:', error)
+    return res.status(500).json({ error: 'Unable to create user account.' })
+  }
+})
+
+router.put('/users/:userId', async (req, res) => {
+  if (req.user.role !== 'Admin') {
+    return res.status(403).json({ error: 'Only a System Administrator can update user profiles.' })
+  }
+
+  const targetId = Number(req.params.userId)
+  const name = String(req.body.name || '').trim()
+  const salutation = String(req.body.salutation || '').trim()
+  const department = String(req.body.department || '').trim()
+  const designation = String(req.body.designation || '').trim()
+  const role = String(req.body.role || '').trim()
+  const isActive = req.body.is_active !== false
+
+  if (!name) {
+    return res.status(400).json({ error: 'Name is required.' })
+  }
+
+  if (targetId === Number(req.user.id) && !isActive) {
+    return res.status(400).json({ error: 'You cannot deactivate your own administrative account.' })
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE users
+       SET name = $1,
+           salutation = $2,
+           department = $3,
+           designation = $4,
+           role = $5,
+           is_active = $6,
+           updated_at = NOW()
+       WHERE id = $7
+       RETURNING id, email, name, salutation, department, designation, role, is_active, updated_at`,
+      [name, salutation || null, department, designation, role, isActive, targetId]
+    )
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found.' })
+    }
+
+    return res.json({ user: result.rows[0], message: `Account for ${name} updated successfully.` })
+  } catch (error) {
+    console.error('Admin update user error:', error)
+    return res.status(500).json({ error: 'Unable to update user profile.' })
+  }
+})
+
+router.post('/users/:userId/reset-password', async (req, res) => {
+  if (req.user.role !== 'Admin') {
+    return res.status(403).json({ error: 'Only a System Administrator can reset credentials.' })
+  }
+
+  const targetId = Number(req.params.userId)
+  const newPassword = String(req.body.newPassword || '123').trim()
+  if (!newPassword) {
+    return res.status(400).json({ error: 'Password cannot be blank.' })
+  }
+
+  try {
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    const result = await pool.query(
+      `UPDATE users
+       SET password = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, email, name`,
+      [passwordHash, targetId]
+    )
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found.' })
+    }
+
+    return res.json({
+      message: `Password for ${result.rows[0].name} (${result.rows[0].email}) has been reset to '${newPassword}'.`
+    })
+  } catch (error) {
+    console.error('Admin reset password error:', error)
+    return res.status(500).json({ error: 'Unable to reset user password.' })
+  }
+})
+
+router.delete('/users/:userId', async (req, res) => {
+  if (req.user.role !== 'Admin') {
+    return res.status(403).json({ error: 'Only a System Administrator can delete user accounts.' })
+  }
+
+  const targetId = Number(req.params.userId)
+  if (targetId === Number(req.user.id)) {
+    return res.status(400).json({ error: 'You cannot remove your own administrative account.' })
+  }
+
+  try {
+    const userResult = await pool.query('SELECT id, name, email FROM users WHERE id = $1', [targetId])
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found.' })
+    }
+    const targetUser = userResult.rows[0]
+
+    const actResult = await pool.query('SELECT COUNT(*)::int AS count FROM activity WHERE staff_id = $1', [targetId])
+    const count = actResult.rows[0]?.count || 0
+
+    if (count > 0) {
+      await pool.query('UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id = $1', [targetId])
+      return res.json({
+        message: `${targetUser.name} has ${count} recorded activities. Account has been deactivated to preserve institutional audit trails.`
+      })
+    } else {
+      await pool.query('DELETE FROM users WHERE id = $1', [targetId])
+      return res.json({ message: `Account for ${targetUser.name} (${targetUser.email}) removed permanently.` })
+    }
+  } catch (error) {
+    console.error('Admin delete user error:', error)
+    return res.status(500).json({ error: 'Unable to remove user account.' })
+  }
+})
+
+router.get('/system-summary', async (req, res) => {
+  try {
+    const [userStats, actStats, emailStats] = await Promise.all([
+      pool.query(`
+        SELECT
+          COUNT(*)::int AS total_users,
+          COUNT(*) FILTER (WHERE role = 'Faculty')::int AS faculty_count,
+          COUNT(*) FILTER (WHERE role = 'HOD')::int AS hod_count,
+          COUNT(*) FILTER (WHERE role = 'Club')::int AS club_count,
+          COUNT(*) FILTER (WHERE role = 'Admin')::int AS admin_count,
+          COUNT(*) FILTER (WHERE is_active = TRUE)::int AS active_users,
+          COUNT(*) FILTER (WHERE is_active = FALSE)::int AS inactive_users
+        FROM users
+      `),
+      pool.query(`
+        SELECT
+          COUNT(*)::int AS total_activities,
+          COUNT(*) FILTER (WHERE workflow_status = 'Approved')::int AS approved_count,
+          COUNT(*) FILTER (WHERE workflow_status = 'Submitted')::int AS pending_count,
+          COUNT(*) FILTER (WHERE workflow_status = 'Changes Requested')::int AS changes_requested_count,
+          COUNT(*) FILTER (WHERE workflow_status = 'Draft')::int AS draft_count
+        FROM activity
+        WHERE deleted_at IS NULL
+      `),
+      pool.query(`
+        SELECT
+          COUNT(*)::int AS total_jobs,
+          COUNT(*) FILTER (WHERE status = 'SENT')::int AS sent_jobs,
+          COUNT(*) FILTER (WHERE status = 'PENDING')::int AS pending_jobs,
+          COUNT(*) FILTER (WHERE status = 'FAILED')::int AS failed_jobs
+        FROM email_jobs
+      `)
+    ])
+
+    return res.json({
+      users: userStats.rows[0],
+      activities: actStats.rows[0],
+      emails: emailStats.rows[0],
+      timestamp: new Date().toISOString()
+    })
+  } catch (error) {
+    console.error('System summary error:', error)
+    return res.status(500).json({ error: 'Unable to load system summary.' })
   }
 })
 

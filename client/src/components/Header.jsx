@@ -8,14 +8,24 @@ const Header = ({ activeNav, navigate, logout, user, notifications, unreadCount,
   const [notifOpen, setNotifOpen] = useState(false);
   const headerRef = useRef(null);
   const isReviewer = ['HOD', 'Admin'].includes(user?.role);
+  const isAdmin = user?.role === 'Admin';
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-    { id: 'submit', label: 'New Activity', icon: 'plus' },
-    { id: 'records', label: isReviewer ? 'Department Records' : user?.role === 'Club' ? 'Club Records' : 'My Records', icon: 'records' },
-    { id: 'reports', label: 'Reports', icon: 'reports' },
-    { id: 'profile', label: 'My Profile', icon: 'user' }
-  ];
+  const navItems = isAdmin
+    ? [
+        { id: 'dashboard', label: 'Console', icon: 'dashboard' },
+        { id: 'users', label: 'User Directory', icon: 'users' },
+        { id: 'records', label: 'All Records', icon: 'records' },
+        { id: 'reports', label: 'Reports', icon: 'reports' },
+        { id: 'diagnostics', label: 'Diagnostics', icon: 'refresh' },
+        { id: 'profile', label: 'Admin Profile', icon: 'user' }
+      ]
+    : [
+        { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+        { id: 'submit', label: 'New Activity', icon: 'plus' },
+        { id: 'records', label: user?.role === 'HOD' ? 'Department Records' : user?.role === 'Club' ? 'Club Records' : 'My Records', icon: 'records' },
+        { id: 'reports', label: 'Reports', icon: 'reports' },
+        { id: 'profile', label: 'My Profile', icon: 'user' }
+      ];
 
   useEffect(() => {
     const closeMenus = (event) => {

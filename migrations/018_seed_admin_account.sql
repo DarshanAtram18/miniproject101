@@ -9,3 +9,4 @@ ON CONFLICT (email) DO UPDATE
 SET password = EXCLUDED.password, role = 'Admin', name = EXCLUDED.name, is_active = TRUE;
 
 COMMIT;
+

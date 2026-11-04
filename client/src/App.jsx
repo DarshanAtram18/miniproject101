@@ -17,12 +17,14 @@ import Records from './components/Records';
 import Reports from './components/Reports';
 import SubmitActivity from './components/SubmitActivity';
 import Profile from './components/Profile';
+import UserManagement from './components/UserManagement';
+import Diagnostics from './components/Diagnostics';
 
 const RECORD_CACHE_KEY = 'wce_prof_insights_record_cache_v2';
 const ACTIVE_VIEW_KEY = 'wce_prof_insights_active_view';
 const EDITING_ACTIVITY_KEY = 'wce_editing_activity';
 const DRAFT_KEY = 'wce_activity_draft_v1';
-const VALID_VIEWS = ['dashboard', 'submit', 'records', 'reports', 'profile'];
+const VALID_VIEWS = ['dashboard', 'submit', 'records', 'reports', 'profile', 'users', 'diagnostics'];
 
 // Clear legacy localStorage sessions so previous shared credentials don't leak into new tabs
 try {
@@ -44,13 +46,19 @@ const getViewFromHash = () => {
   return VALID_VIEWS.includes(hash) ? hash : null;
 };
 
-const getInitialView = (hasSession) => {
+const getInitialView = (hasSession, userRole) => {
   if (!hasSession) return 'login';
   const hashView = getViewFromHash();
-  if (hashView) return hashView;
+  if (hashView) {
+    if (userRole === 'Admin' && hashView === 'submit') return 'users';
+    return hashView;
+  }
   try {
     const saved = sessionStorage.getItem(ACTIVE_VIEW_KEY);
-    if (saved && VALID_VIEWS.includes(saved)) return saved;
+    if (saved && VALID_VIEWS.includes(saved)) {
+      if (userRole === 'Admin' && saved === 'submit') return 'users';
+      return saved;
+    }
   } catch {}
   return 'dashboard';
 };
@@ -67,6 +75,8 @@ const viewLabels = {
   submit: 'Add Faculty Activity',
   records: 'Activity Records',
   reports: 'Reports',
+  users: 'User Directory',
+  diagnostics: 'System Diagnostics',
   profile: 'My Profile'
 };
 
@@ -220,7 +230,7 @@ const App = () => {
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
       setSession(nextSession);
       setRecordsLoading(true);
-      const targetView = getInitialView(true);
+      const targetView = getInitialView(true, nextSession.user?.role);
       setView(targetView);
       sessionStorage.setItem(ACTIVE_VIEW_KEY, targetView);
       window.location.hash = `#${targetView}`;
@@ -251,14 +261,19 @@ const App = () => {
   };
 
   const navigate = (nextView) => {
-    if (nextView !== 'submit') {
+    let target = nextView;
+    // Admins manage users, supervise reports, and monitor health; they do NOT submit faculty activities
+    if (session?.user?.role === 'Admin' && target === 'submit') {
+      target = 'users';
+    }
+    if (target !== 'submit') {
       setEditingActivity(null);
       sessionStorage.removeItem(EDITING_ACTIVITY_KEY);
     }
-    setView(nextView);
-    sessionStorage.setItem(ACTIVE_VIEW_KEY, nextView);
-    if (window.location.hash !== `#${nextView}`) {
-      window.location.hash = `#${nextView}`;
+    setView(target);
+    sessionStorage.setItem(ACTIVE_VIEW_KEY, target);
+    if (window.location.hash !== `#${target}`) {
+      window.location.hash = `#${target}`;
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -387,7 +402,7 @@ const App = () => {
       <Breadcrumb current={viewLabels[view]} navigate={navigate} />
       <main className="app-main" id="main-content">
         {view === 'dashboard' && <Dashboard user={user} records={records} total={pagination.total} loading={recordsLoading} error={recordsError} navigate={navigate} reload={() => loadRecords({ page: 1 })} />}
-        {view === 'submit' && (
+        {view === 'submit' && user.role !== 'Admin' && (
           <SubmitActivity
             key={editingActivity?.act_id || 'new-activity'}
             user={user}
@@ -404,6 +419,8 @@ const App = () => {
         )}
         {view === 'records' && <Records user={user} records={records} loading={recordsLoading} error={recordsError} pagination={pagination} catalog={catalog} onReload={loadRecords} onEdit={editRecord} onDelete={deleteRecord} onReview={reviewRecord} navigate={navigate} showNotification={showNotification} />}
         {view === 'reports' && <Reports user={user} catalog={catalog} records={records} total={pagination.total} onDownload={downloadReport} showNotification={showNotification} />}
+        {view === 'users' && user.role === 'Admin' && <UserManagement user={user} showNotification={showNotification} />}
+        {view === 'diagnostics' && user.role === 'Admin' && <Diagnostics showNotification={showNotification} />}
         {view === 'profile' && <Profile user={user} onUpdateUser={updateUser} onChangePassword={changePassword} onSignOut={logout} />}
       </main>
       <footer className="app-footer"><span>© 2026 Walchand College of Engineering, Sangli</span><span>WCE Prof-Insights · Faculty Activity & Evidence Portal</span></footer>
