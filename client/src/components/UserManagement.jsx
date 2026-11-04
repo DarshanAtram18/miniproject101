@@ -291,7 +291,7 @@ const UserManagement = ({ user, showNotification }) => {
                           {u.name?.charAt(0)?.toUpperCase() || 'U'}
                         </div>
                         <div>
-                          <strong className="table-primary">{u.salutation ? `${u.salutation} ` : ''}{u.name}</strong>
+                          <strong className="table-primary">{(u.salutation && u.role !== 'Club' && u.role !== 'Admin') ? `${u.salutation} ` : ''}{u.name}</strong>
                           {Number(u.id) === Number(user.id) && (
                             <span style={{ fontSize: '10.5px', color: '#2563eb', fontWeight: 700, marginLeft: '6px' }}>(You)</span>
                           )}
@@ -408,12 +408,13 @@ const UserManagement = ({ user, showNotification }) => {
           }
         >
           <form onSubmit={handleCreateUser} style={{ display: 'grid', gap: '14px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: '10px' }}>
               <div>
                 <label className="form-label">Salutation</label>
                 <select
                   className="form-control"
-                  value={newUser.salutation}
+                  disabled={newUser.role === 'Club' || newUser.role === 'Admin'}
+                  value={newUser.role === 'Club' || newUser.role === 'Admin' ? '' : (newUser.salutation || '')}
                   onChange={(e) => setNewUser({ ...newUser, salutation: e.target.value })}
                 >
                   <option value="Prof.">Prof.</option>
@@ -421,6 +422,7 @@ const UserManagement = ({ user, showNotification }) => {
                   <option value="Mr.">Mr.</option>
                   <option value="Ms.">Ms.</option>
                   <option value="Mrs.">Mrs.</option>
+                  <option value="">(None)</option>
                 </select>
               </div>
               <div>
@@ -518,12 +520,13 @@ const UserManagement = ({ user, showNotification }) => {
           }
         >
           <form onSubmit={handleUpdateUser} style={{ display: 'grid', gap: '14px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: '10px' }}>
               <div>
                 <label className="form-label">Salutation</label>
                 <select
                   className="form-control"
-                  value={editModalUser.salutation || ''}
+                  disabled={editModalUser.role === 'Club' || editModalUser.role === 'Admin'}
+                  value={editModalUser.role === 'Club' || editModalUser.role === 'Admin' ? '' : (editModalUser.salutation || '')}
                   onChange={(e) => setEditModalUser({ ...editModalUser, salutation: e.target.value })}
                 >
                   <option value="Prof.">Prof.</option>
@@ -531,6 +534,7 @@ const UserManagement = ({ user, showNotification }) => {
                   <option value="Mr.">Mr.</option>
                   <option value="Ms.">Ms.</option>
                   <option value="Mrs.">Mrs.</option>
+                  <option value="">(None)</option>
                 </select>
               </div>
               <div>
@@ -604,3 +608,4 @@ const UserManagement = ({ user, showNotification }) => {
 };
 
 export default UserManagement;
+

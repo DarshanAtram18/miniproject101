@@ -444,14 +444,11 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
 
     if (selectedType?.supportsFunding) {
       if (!['Yes', 'No'].includes(form.details.funded)) {
-        nextErrors['details.funded'] = 'Please select whether funding or fee support was involved (select "No" if not funded).';
+        nextErrors['details.funded'] = 'Please select whether a registration fee was paid (select "No" if free of cost).';
       } else if (form.details.funded === 'Yes') {
-        if (!form.details.fundingAgency?.trim()) {
-          nextErrors['details.fundingAgency'] = 'Funding agency or sponsor is required when funding was involved.';
-        }
         const amtClean = String(form.details.fundingAmount ?? '').replace(/[₹,Rs.\s]/gi, '').trim();
-        if (amtClean === '' || isNaN(Number(amtClean)) || Number(amtClean) < 0) {
-          nextErrors['details.fundingAmount'] = 'Please enter a valid funded amount in ₹ (enter 0 if waived / sponsored).';
+        if (amtClean === '' || isNaN(Number(amtClean)) || Number(amtClean) <= 0) {
+          nextErrors['details.fundingAmount'] = 'Please enter the registration fee amount paid in ₹.';
         }
       }
     }
@@ -538,6 +535,9 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
           sanitizedDetails.funded = 'Yes';
           if (sanitizedDetails.fundingAmount !== undefined && sanitizedDetails.fundingAmount !== null && sanitizedDetails.fundingAmount !== '') {
             sanitizedDetails.fundingAmount = String(sanitizedDetails.fundingAmount).replace(/[₹,Rs.\s]/gi, '').trim();
+          }
+          if (!sanitizedDetails.fundingAgency?.trim()) {
+            sanitizedDetails.fundingAgency = 'Self-Paid / Registration Fee';
           }
         } else {
           sanitizedDetails.funded = 'No';
@@ -1162,6 +1162,7 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
                 )}
 
                 {/* Funding info */}
+                {/* Registration Fee Paid */}
                 {selectedType?.supportsFunding && (
                   <div
                     className="form-group form-full"
@@ -1175,10 +1176,10 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
                     }}
                   >
                     <label style={{ fontWeight: '700', color: '#1a365d', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      Registration Fees Funded / Financial Support? <Required />
+                      Registration / Participation Fee Paid? <Required />
                     </label>
                     <p style={{ margin: '3px 0 10px', fontSize: '12.5px', color: '#64748b' }}>
-                      Did this activity receive financial support (e.g. registration fee reimbursement, TEQIP sponsorship, AICTE grant, college or club budget)?
+                      Did this activity require registration or participation fees to attend or participate?
                     </p>
                     <div style={{ display: 'flex', gap: '24px', marginTop: '6px', flexWrap: 'wrap' }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13.5px', fontWeight: form.details.funded === 'Yes' ? '700' : '500', color: form.details.funded === 'Yes' ? '#1d4ed8' : '#334155' }}>
@@ -1193,7 +1194,7 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
                             setErrors((prev) => ({ ...prev, 'details.funded': undefined }));
                           }}
                         />
-                        <span>Yes, Funding / Fee Support Involved</span>
+                        <span>Yes, Registration Fee Paid</span>
                       </label>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13.5px', fontWeight: form.details.funded === 'No' ? '700' : '500', color: form.details.funded === 'No' ? '#15803d' : '#334155' }}>
                         <input
@@ -1220,7 +1221,7 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
                             }));
                           }}
                         />
-                        <span>No, Self-Funded / No Financial Support Involved</span>
+                        <span>No (Free of Cost / No Fee Paid)</span>
                       </label>
                     </div>
                     <FieldError message={errors['details.funded']} />
@@ -1240,8 +1241,28 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
                     }}
                   >
                     <div className="form-group">
+                      <label htmlFor="input-fund-amt" style={{ fontWeight: '700', color: '#166534' }}>
+                        Registration Fee Amount Paid (₹) <Required />
+                      </label>
+                      <input
+                        id="input-fund-amt"
+                        className="form-control"
+                        type="number"
+                        min="1"
+                        step="any"
+                        value={form.details.fundingAmount ?? ''}
+                        onChange={(e) => setDetail('fundingAmount', e.target.value)}
+                        placeholder="e.g. 500, 1500, 2000"
+                        autoFocus
+                      />
+                      <small style={{ color: '#475569', fontSize: '11px', display: 'block', marginTop: '3px' }}>
+                        Enter the total registration or participation fee amount paid in ₹.
+                      </small>
+                      <FieldError message={errors['details.fundingAmount']} />
+                    </div>
+                    <div className="form-group">
                       <label htmlFor="input-fund-agency" style={{ fontWeight: '700', color: '#166534' }}>
-                        Funding Agency / Sponsor <Required />
+                        Funding / Sponsor Source <span style={{ fontSize: '11px', fontWeight: 'normal', color: '#4b5563' }}>(Optional)</span>
                       </label>
                       <input
                         id="input-fund-agency"
@@ -1250,43 +1271,18 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
                         list="agency-suggestions"
                         value={form.details.fundingAgency || ''}
                         onChange={(e) => setDetail('fundingAgency', e.target.value)}
-                        placeholder="Select or enter agency (e.g. TEQIP / AICTE / College / Club Budget)"
+                        placeholder="Self-Paid (or TEQIP / College Budget)"
                       />
                       <datalist id="agency-suggestions">
-                        <option value="TEQIP / College Institutional Support" />
-                        <option value="AICTE" />
+                        <option value="Self-Paid (Faculty)" />
+                        <option value="College Institutional Support / TEQIP" />
                         <option value="WCE Departmental Budget" />
                         <option value="Student Club / Chapter Budget" />
-                        <option value="UGC" />
-                        <option value="DST" />
-                        <option value="ISTE" />
-                        <option value="Industry Sponsored" />
-                        <option value="Self-Funded / Reimbursed" />
-                        <option value="Other" />
+                        <option value="AICTE / ISTE" />
                       </datalist>
                       <small style={{ color: '#475569', fontSize: '11px', display: 'block', marginTop: '3px' }}>
-                        Specify the body or scheme that provided registration fee or travel support.
+                        Leave blank if self-funded by faculty.
                       </small>
-                      <FieldError message={errors['details.fundingAgency']} />
-                    </div>
-                    <div className="form-group">
-                      <label htmlFor="input-fund-amt" style={{ fontWeight: '700', color: '#166534' }}>
-                        Amount Funded (₹) <Required />
-                      </label>
-                      <input
-                        id="input-fund-amt"
-                        className="form-control"
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={form.details.fundingAmount ?? ''}
-                        onChange={(e) => setDetail('fundingAmount', e.target.value)}
-                        placeholder="e.g. 5000 (enter 0 if waived / sponsored)"
-                      />
-                      <small style={{ color: '#475569', fontSize: '11px', display: 'block', marginTop: '3px' }}>
-                        Enter amount in ₹. Enter 0 if the registration fee was completely waived or free.
-                      </small>
-                      <FieldError message={errors['details.fundingAmount']} />
                     </div>
                   </div>
                 )}
@@ -1496,14 +1492,14 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
                   <p style={{ margin: '0 0 6px' }}><strong>Academic Year:</strong> {form.academicYear}</p>
                   {selectedType?.supportsFunding && (
                     <p style={{ margin: '0 0 6px' }}>
-                      <strong>Fee Funding / Support:</strong>{' '}
+                      <strong>Registration Fee:</strong>{' '}
                       {form.details.funded === 'Yes' ? (
                         <span style={{ color: '#15803d', fontWeight: '700' }}>
-                          ✓ Fee Funded ({form.details.fundingAgency || 'Agency not specified'} · ₹{form.details.fundingAmount ?? '0'})
+                          ✓ Fee Paid: ₹{form.details.fundingAmount ?? '0'} {form.details.fundingAgency ? `(${form.details.fundingAgency})` : ''}
                         </span>
                       ) : (
                         <span style={{ color: '#475569', fontWeight: '500' }}>
-                          No Financial Support Involved (Self-Funded)
+                          Free of Cost / No Fee Paid
                         </span>
                       )}
                     </p>
@@ -1513,19 +1509,19 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
 
                 {/* Pre-submission readiness assessment */}
                 <div style={{
-                  background: (form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== ''))) && hasProof) ? '#f0fdf4' : '#fffbeb',
-                  border: (form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== ''))) && hasProof) ? '1px solid #86efac' : '1px solid #fde047',
+                  background: (form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAmount !== ''))) && hasProof) ? '#f0fdf4' : '#fffbeb',
+                  border: (form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAmount !== ''))) && hasProof) ? '1px solid #86efac' : '1px solid #fde047',
                   borderRadius: '8px',
                   padding: '12px 14px',
                   marginBottom: '16px',
                   fontSize: '12.5px'
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontWeight: '700', color: (form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== ''))) && hasProof) ? '#166534' : '#854d0e', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {(form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== ''))) && hasProof) ? '✓ Submission Verification: Ready' : '⚠️ Submission Verification: Attention Needed'}
+                    <span style={{ fontWeight: '700', color: (form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAmount !== ''))) && hasProof) ? '#166534' : '#854d0e', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {(form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAmount !== ''))) && hasProof) ? '✓ Submission Verification: Ready' : '⚠️ Submission Verification: Attention Needed'}
                     </span>
-                    <span style={{ fontSize: '11px', fontWeight: '700', color: (form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== ''))) && hasProof) ? '#15803d' : '#a16207' }}>
-                      {(form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== ''))) && hasProof) ? 'All Criteria Met' : 'Check Incomplete Items Below'}
+                    <span style={{ fontSize: '11px', fontWeight: '700', color: (form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAmount !== ''))) && hasProof) ? '#15803d' : '#a16207' }}>
+                      {(form.title?.trim() && form.startDate && (!selectedType?.supportsFunding || (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAmount !== ''))) && hasProof) ? 'All Criteria Met' : 'Check Incomplete Items Below'}
                     </span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px', fontSize: '12px' }}>
@@ -1536,9 +1532,9 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
                       <span>{form.startDate ? '✓' : '✗'}</span> Dates & Academic Year
                     </div>
                     {selectedType?.supportsFunding && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== '')) ? '#166534' : '#dc2626', fontWeight: '600' }}>
-                        <span>{(form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAgency && form.details.fundingAmount !== '')) ? '✓' : '✗'}</span>
-                        Funding: {form.details.funded === 'Yes' ? 'Fee Funded' : 'No Support (Self-Funded)'}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: (form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAmount !== '')) ? '#166534' : '#dc2626', fontWeight: '600' }}>
+                        <span>{(form.details.funded === 'No' || (form.details.funded === 'Yes' && form.details.fundingAmount !== '')) ? '✓' : '✗'}</span>
+                        Registration Fee: {form.details.funded === 'Yes' ? `Paid (₹${form.details.fundingAmount || '0'})` : 'Free of Cost'}
                       </div>
                     )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: hasProof ? '#166534' : '#dc2626', fontWeight: '600' }}>
@@ -1795,14 +1791,27 @@ const SubmitActivity = ({ user, catalog, initialActivity, onSubmit, onCancel, su
                             <td style={{ padding: '5px 6px', color: '#2d3748' }}>{form.participantCount}</td>
                           </tr>
                         )}
-                        {detailEntries.map(([key, val]) => (
-                          <tr key={key} style={{ borderBottom: '1px solid #edf2f7' }}>
-                            <td style={{ padding: '5px 6px', fontWeight: '600', color: '#24507f' }}>{humanize(key)}:</td>
-                            <td style={{ padding: '5px 6px', color: '#2d3748' }}>
-                              {typeof val === 'boolean' ? (val ? 'Yes' : 'No') : String(val)}
-                            </td>
-                          </tr>
-                        ))}
+                        {detailEntries.map(([key, val]) => {
+                          let displayKey = humanize(key);
+                          let displayVal = typeof val === 'boolean' ? (val ? 'Yes' : 'No') : String(val);
+                          if (key === 'funded') {
+                            displayKey = 'Registration Fee';
+                            displayVal = val === 'Yes'
+                              ? `Fee Paid (₹${form.details.fundingAmount || '0'})`
+                              : 'Free / No Fee Paid';
+                          } else if (key === 'fundingAmount') {
+                            displayKey = 'Fee Amount';
+                            displayVal = `₹${val}`;
+                          } else if (key === 'fundingAgency') {
+                            displayKey = 'Funding Source';
+                          }
+                          return (
+                            <tr key={key} style={{ borderBottom: '1px solid #edf2f7' }}>
+                              <td style={{ padding: '5px 6px', fontWeight: '600', color: '#24507f' }}>{displayKey}:</td>
+                              <td style={{ padding: '5px 6px', color: '#2d3748' }}>{displayVal}</td>
+                            </tr>
+                          );
+                        })}
                         {form.outcomes && (
                           <tr>
                             <td style={{ padding: '5px 6px', fontWeight: '600', color: '#24507f' }}>Outcomes:</td>

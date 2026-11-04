@@ -135,11 +135,16 @@ export const normalizeHost = (host = '') => {
 
 export const formatFacultyNameWithSalutation = (record = {}) => {
   const raw = String(record.staff_name || record.staffName || 'Faculty Member').trim();
+  const role = record.staff_role || record.role;
+  if (role === 'Club' || role === 'Admin') return raw;
   const prefixes = ['Dr.', 'Prof.', 'Mr.', 'Mrs.', 'Ms.', 'Dr ', 'Prof ', 'Mr ', 'Mrs ', 'Ms '];
   for (const p of prefixes) {
     if (raw.startsWith(p)) return raw;
   }
-  const sal = record.staff_salutation || record.salutation || 'Prof.';
+  const sal = record.staff_salutation !== undefined && record.staff_salutation !== null
+    ? record.staff_salutation
+    : (record.salutation || (role === 'HOD' ? 'Dr.' : 'Prof.'));
+  if (!sal) return raw;
   return `${sal} ${raw}`;
 };
 

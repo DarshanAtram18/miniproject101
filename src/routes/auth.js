@@ -10,7 +10,7 @@ const publicUser = (user) => ({
   id: user.id,
   email: user.email,
   name: user.name,
-  salutation: user.salutation || 'Prof.',
+  salutation: user.role === 'Club' || user.role === 'Admin' ? null : (user.salutation || (user.role === 'HOD' ? 'Dr.' : 'Prof.')),
   department: user.department || '',
   designation: user.designation || 'Faculty',
   role: user.role || 'Faculty'
@@ -60,25 +60,51 @@ router.get('/me', isLoggedIn, (req, res) => {
 })
 
 router.patch('/profile', isLoggedIn, async (req, res) => {
-  const name = req.body.name !== undefined ? String(req.body.name).trim() : null
-  const salutation = req.body.salutation !== undefined ? String(req.body.salutation).trim() : null
-  const designation = req.body.designation !== undefined ? String(req.body.designation).trim() : null
+  const hasName = req.body.name !== undefined
+  const hasSalutation = req.body.salutation !== undefined
+  const hasDesignation = req.body.designation !== undefined
 
-  if (name !== null && name.length < 2) {
+  const name = hasName ? String(req.body.name).trim() : null
+  const salutation = hasSalutation ? String(req.body.salutation).trim() : null
+  const designation = hasDesignation ? String(req.body.designation).trim() : null
+
+  if (hasName && (!name || name.length < 2)) {
     return res.status(400).json({ error: 'Full name must contain at least 2 characters.' })
   }
 
   try {
+    const updates = []
+    const params = []
+    let p = 1
+
+    if (hasName) {
+      updates.push(`name = $${p++}`)
+      params.push(name)
+    }
+    if (hasSalutation) {
+      updates.push(`salutation = $${p++}`)
+      params.push(salutation || null)
+    }
+    if (hasDesignation) {
+      updates.push(`designation = $${p++}`)
+      params.push(designation || null)
+    }
+
+    if (updates.length === 0) {
+      return res.json({ user: publicUser(req.user) })
+    }
+
+    updates.push('updated_at = NOW()')
+    params.push(req.user.id)
+
     const result = await pool.query(
       `UPDATE users
-       SET name = COALESCE(NULLIF($1, ''), name),
-           salutation = COALESCE(NULLIF($2, ''), salutation),
-           designation = COALESCE(NULLIF($3, ''), designation),
-           updated_at = NOW()
-       WHERE id = $4
+       SET ${updates.join(', ')}
+       WHERE id = $${p}
        RETURNING *`,
-      [name, salutation, designation, req.user.id]
+      params
     )
+
     if (!result.rows.length) {
       return res.status(404).json({ error: 'User account not found.' })
     }

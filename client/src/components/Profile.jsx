@@ -159,7 +159,7 @@ const Profile = ({ user, onUpdateUser, onChangePassword, onSignOut }) => {
           <div className="profile-summary-content">
             <span className="profile-large-avatar">{initials(user.name)}</span>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
-              <h2 style={{ margin: 0 }}>{user.name}</h2>
+              <h2 style={{ margin: 0 }}>{(user.salutation && user.role !== 'Club' && user.role !== 'Admin') ? `${user.salutation} ` : ''}{user.name}</h2>
               <button
                 type="button"
                 className="btn btn-ghost"
@@ -216,7 +216,7 @@ const Profile = ({ user, onUpdateUser, onChangePassword, onSignOut }) => {
                     <select
                       id="select-salutation"
                       className="form-control"
-                      value={salutation}
+                      value={salutation || ''}
                       onChange={(e) => setSalutation(e.target.value)}
                     >
                       <option value="Prof.">Prof. (Professor)</option>
@@ -224,6 +224,7 @@ const Profile = ({ user, onUpdateUser, onChangePassword, onSignOut }) => {
                       <option value="Mr.">Mr.</option>
                       <option value="Mrs.">Mrs.</option>
                       <option value="Ms.">Ms.</option>
+                      <option value="">None (No Title / Prefix)</option>
                     </select>
                     <span className="helper-text">Prefix used in all reports.</span>
                   </div>
