@@ -26,6 +26,7 @@ const Records = ({
   showNotification
 }) => {
   const isReviewer = ['HOD', 'Admin'].includes(user.role);
+  const isHod = String(user?.role || '').trim().toUpperCase() === 'HOD';
   const isAppreciationIssued = (record) => {
     if (!record) return false;
     if (record.appreciation_issued) return true;
@@ -251,7 +252,7 @@ const Records = ({
                           <div className="row-actions">
                             <button className="icon-button" type="button" onClick={() => openRecord(record)} aria-label={`View ${record.title}`} title="View details"><Icon name="eye" size={18} /></button>
                             <button className="icon-button" type="button" onClick={() => openDetailedReport(record)} aria-label="Official Detailed Report" title="View &amp; Download Detailed Event Report"><Icon name="reports" size={18} /></button>
-                            {isReviewer && (record.workflow_status === 'Approved' || isAppreciationIssued(record)) ? (
+                            {isHod && (record.workflow_status === 'Approved' || isAppreciationIssued(record)) ? (
                               <button
                                 className="icon-button"
                                 type="button"
@@ -262,7 +263,7 @@ const Records = ({
                               >
                                 <Icon name="award" size={18} />
                               </button>
-                            ) : !isReviewer && record.workflow_status === 'Approved' && isAppreciationIssued(record) ? (
+                            ) : !isHod && record.workflow_status === 'Approved' && isAppreciationIssued(record) ? (
                               <button
                                 className="icon-button"
                                 type="button"
@@ -304,7 +305,7 @@ const Records = ({
           footer={
             <>
               <button className="btn btn-secondary" type="button" onClick={closeRecord}>Close</button>
-              {isReviewer && (viewedRecord.workflow_status === 'Approved' || isAppreciationIssued(viewedRecord)) ? (
+              {isHod && (viewedRecord.workflow_status === 'Approved' || isAppreciationIssued(viewedRecord)) ? (
                 <button
                   className="btn btn-secondary"
                   type="button"
@@ -314,7 +315,7 @@ const Records = ({
                 >
                   <Icon name="award" size={16} /> {isAppreciationIssued(viewedRecord) ? '✓ Appreciation Letter (Issued)' : '📤 Send Appreciation Letter'}
                 </button>
-              ) : !isReviewer && viewedRecord.workflow_status === 'Approved' && isAppreciationIssued(viewedRecord) ? (
+              ) : !isHod && viewedRecord.workflow_status === 'Approved' && isAppreciationIssued(viewedRecord) ? (
                 <button
                   className="btn btn-secondary"
                   type="button"
@@ -378,7 +379,7 @@ const Records = ({
               {viewedRecord.audit?.length > 0 && <section className="detail-section"><h3>Review and change history</h3><ol className="audit-timeline">{viewedRecord.audit.map((entry) => <li key={entry.id}><span className="audit-dot" /><div><strong>{entry.action}</strong><span>{entry.actorName || 'System'} · {new Date(entry.createdAt).toLocaleString('en-IN')}</span>{entry.note && <p>{entry.note}</p>}</div></li>)}</ol></section>}
 
               {isReviewer && viewedRecord.workflow_status === 'Submitted' && Number(viewedRecord.staff_id) !== Number(user.id) && <section className="review-decision-panel"><h3>Reviewer decision</h3><label htmlFor="review-comment">Comment <span>{reviewComment ? '' : 'required when requesting changes'}</span></label><textarea id="review-comment" className="form-control" rows="3" value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} placeholder="Give clear, actionable corrections when returning a record." /><div className="review-actions"><button className="btn btn-secondary" type="button" disabled={reviewing || !reviewComment.trim()} onClick={() => submitReview('Changes Requested')}>Request Changes</button><button className="btn btn-primary" type="button" disabled={reviewing} onClick={() => submitReview('Approved')}><Icon name="check" size={17} /> Approve Activity</button></div></section>}
-              {isReviewer && viewedRecord.workflow_status === 'Approved' && Number(viewedRecord.staff_id) !== Number(user.id) && !isAppreciationIssued(viewedRecord) && (
+              {isHod && viewedRecord.workflow_status === 'Approved' && Number(viewedRecord.staff_id) !== Number(user.id) && !isAppreciationIssued(viewedRecord) && (
                 <section className="review-decision-panel" style={{ background: '#fffbeb', borderColor: '#fde68a' }}>
                   <h3 style={{ color: '#92400e' }}>🏅 Send Appreciation Letter</h3>
                   <p style={{ fontSize: '0.875rem', color: '#78350f', marginBottom: '12px' }}>This activity is approved. You may now issue and send an official Appreciation Letter to the {viewedRecord.staff_name?.includes('Club') || String(viewedRecord.faculty_role || '').toLowerCase().includes('club') ? 'club' : 'faculty member'}.</p>

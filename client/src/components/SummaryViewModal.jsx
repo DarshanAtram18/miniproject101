@@ -15,6 +15,7 @@ const SummaryViewModal = ({ activity, onClose, onDownload, downloading, user, sh
   if (!activity) return null;
 
   const isReviewer = ['HOD', 'Admin'].includes(user?.role);
+  const isHod = String(user?.role || '').trim().toUpperCase() === 'HOD';
   const isAppreciationIssued = (() => {
     let det = activity.details;
     if (typeof det === 'string') {
@@ -373,7 +374,7 @@ const SummaryViewModal = ({ activity, onClose, onDownload, downloading, user, sh
           <button className="btn btn-secondary btn-sm" type="button" onClick={onClose}>
             Close
           </button>
-          {isReviewer ? (
+          {isHod ? (
             <button
               className="btn btn-secondary btn-sm"
               type="button"

@@ -23,6 +23,7 @@ const DetailedReportModal = ({ activity, user, onClose, showNotification }) => {
   const touchStartX = useRef(null);
 
   const isReviewer = ['HOD', 'Admin'].includes(user?.role);
+  const isHod = String(user?.role || '').trim().toUpperCase() === 'HOD';
   const isAppreciationIssued = (() => {
     if (!activity) return false;
     let det = activity.details;
@@ -450,7 +451,7 @@ const DetailedReportModal = ({ activity, user, onClose, showNotification }) => {
           </span>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button className="btn btn-secondary" type="button" onClick={onClose}>Close</button>
-            {isReviewer ? (
+            {isHod ? (
               <button
                 className="btn btn-secondary"
                 type="button"

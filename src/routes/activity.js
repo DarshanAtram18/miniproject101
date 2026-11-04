@@ -689,7 +689,7 @@ router.get('/:activityId/appreciation-letter/preview', async (req, res) => {
       return res.status(403).json({ error: 'You do not have permission to view this appreciation letter.' })
     }
 
-    const isHod = ['HOD', 'Admin'].includes(req.user.role)
+    const isHod = String(req.user.role || '').trim().toUpperCase() === 'HOD'
     const letterData = activity.details?.appreciation_letter || null
     const isIssued = Boolean(letterData && letterData.issued)
 
@@ -728,9 +728,9 @@ router.get('/:activityId/appreciation-letter/preview', async (req, res) => {
 // POST: HOD issues and sends the Appreciation Letter to the faculty member's portal
 router.post('/:activityId/appreciation-letter/issue', async (req, res) => {
   try {
-    const isHod = ['HOD', 'Admin'].includes(req.user.role)
+    const isHod = String(req.user.role || '').trim().toUpperCase() === 'HOD'
     if (!isHod) {
-      return res.status(403).json({ error: 'Only the Head of Department or Administrator can issue an Appreciation Letter.' })
+      return res.status(403).json({ error: 'Only the Head of Department (HOD) can issue an Appreciation Letter.' })
     }
 
     const activityId = Number(req.params.activityId)
@@ -851,7 +851,7 @@ router.get('/:activityId/appreciation-letter', async (req, res) => {
       return res.status(403).json({ error: 'You do not have permission to download this appreciation letter.' })
     }
 
-    const isHod = ['HOD', 'Admin'].includes(req.user.role)
+    const isHod = String(req.user.role || '').trim().toUpperCase() === 'HOD'
     const letterData = activity.details?.appreciation_letter || null
     const isIssued = Boolean(letterData && letterData.issued)
 
@@ -882,7 +882,7 @@ router.get('/:activityId/appreciation-letter', async (req, res) => {
 // POST: Generate PDF with HOD-edited overrides (HOD / Admin only)
 router.post('/:activityId/appreciation-letter', async (req, res) => {
   try {
-    const isHod = ['HOD', 'Admin'].includes(req.user.role)
+    const isHod = String(req.user.role || '').trim().toUpperCase() === 'HOD'
     if (!isHod) {
       return res.status(403).json({ error: 'Only the Head of Department can customize or generate letters with overrides.' })
     }

@@ -9,6 +9,7 @@ import { currentAcademicYears } from '../utils';
 
 const Reports = ({ user, catalog, records, total, onDownload, showNotification }) => {
   const isReviewer = ['HOD', 'Admin'].includes(user.role);
+  const isHod = String(user?.role || '').trim().toUpperCase() === 'HOD';
   const [periodMode, setPeriodMode] = useState('academicYear');
   const [selectedSingleActId, setSelectedSingleActId] = useState('');
   const [detailedModalRecord, setDetailedModalRecord] = useState(null);
@@ -355,7 +356,7 @@ const Reports = ({ user, catalog, records, total, onDownload, showNotification }
                 >
                   <Icon name="reports" size={16} /> View Official Report
                 </button>
-                {isReviewer ? (
+                {isHod ? (
                   <button
                     className="btn btn-warning"
                     type="button"
